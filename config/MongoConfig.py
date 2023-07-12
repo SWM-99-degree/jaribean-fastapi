@@ -1,9 +1,12 @@
 import json
+import os
 from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
 
 # root 폴더로.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 def get_secret(
     key: str,
@@ -19,5 +22,4 @@ def get_secret(
             return default_value
         raise EnvironmentError(f"Set the {key} environment variable")
 
-MONGO_DB_NAME = get_secret("MONGO_DB_NAME")
-MONGO_DB_URL = get_secret("MONGO_DB_URL")
+MONGO_DB_URL = os.environ["MONGO_DB_URL"]

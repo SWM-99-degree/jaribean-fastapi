@@ -4,5 +4,8 @@ from typing import Dict, Optional
 class MachingReqDto(BaseModel):
     userId : str
     number : int
-    point : Dict[str, float]
+    point : Optional[Dict[str, float]] = None
     cafeId : Optional[str] = None
+
+class MachingCancelReqDto(BaseModel):
+    machingId : str

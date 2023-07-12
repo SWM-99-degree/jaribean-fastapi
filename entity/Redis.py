@@ -6,6 +6,14 @@ class MessageSet:
         self.name = name
         self.redis = redis.Redis(host='localhost', port=6379, db=0)
 
+    def exist(self, *items): 
+        if self.redis.exists(self.name):
+            # 데이터가 존재할 때의 처리
+            return self.redis.get(self.name)
+            # 데이터를 사용하거나 처리하는 로직 추가
+        else:
+            return None
+
     def add(self, *items):
         return self.redis.sadd(self.name, *items)
 
