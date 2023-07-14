@@ -1,5 +1,10 @@
 import redis
 
+class Redis:
+    def __init__(self, name):
+        self.name = name
+        self.redis = redis.Redis(host='localhost', port=6379, db=0)
+
 
 class MessageSet:
     def __init__(self, name):
@@ -13,6 +18,7 @@ class MessageSet:
             # 데이터를 사용하거나 처리하는 로직 추가
         else:
             return None
+
 
     def add(self, *items):
         return self.redis.sadd(self.name, *items)
@@ -49,6 +55,9 @@ class MessageQueue(object):
 
     def put(self, element): # 데이터 넣기
         self.rq.lpush(self.key, element) # left push
+
+    def fastput(self, element):
+        self.rq.rpush(self.key, element)
 
     def get(self, isBlocking=False, timeout=None): # 데이터 꺼내기
         if isBlocking:

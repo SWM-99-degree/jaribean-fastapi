@@ -1,16 +1,22 @@
 from fastapi import FastAPI
+from fastapi.requests import Request
+from fastapi.responses import Response
 from dotenv import load_dotenv
 from botocore.exceptions import ClientError
+from sse_starlette import sse
+from sse_starlette.sse import EventSourceResponse
+from time import sleep
 
 
-from dto.requestDto import MachingReqDto, MachingCancelReqDto
+from dto.requestDto import MatchingReqDto, MatchingCancelReqDto, SSEMessage
 from entity.Redis import MessageQueue, MessageSet
 from entity import mongodb
+from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userFastPutSSEMessage, userPutSSEMessage, getSSEMessage
 
-import requests
 import json
 import os
 from bson.objectid import ObjectId
+import asyncio
 
 
 
@@ -29,6 +35,38 @@ def on_app_start():
 async def on_app_shutdown():
 	mongodb.close()
 
+
+@app.get("/stream")
+async def getSSEInfo( sseMessage : SSEMessage ):
+	async def event_generator():
+		userId = json.dumps(userId)["userId"]
+		while True:
+			Message = getSSEMessage(userId=userId)
+			if Message:
+				yield Message# SSE 이벤트 생성
+			await asyncio.sleep(5)
+	return EventSourceResponse(event_generator())
+	
+
+
+
+# 초기 세팅
+# 매칭 후 취소
+# userSet {cafe1, cafe2, cafe3} - cafe2 삭제 + cafe1
+# user cafe1 
+# cafe1 (user, 2) o
+# cafe2 (user, 2) x
+# cafe3 (user, 2) (user, cancel)
+
+# 모두에게 거절당함
+# userSet {cafe1, cafe2, cafe3} - 모두 삭제
+# user cancel
+# cafe1 (user, 2) x
+# cafe2 (user, 2) x
+# cafe3 (user, 2) x
+
+
+
 # @app.get("/api/db")
 # async def getDBTEST():
 # 	# 참고 자료
@@ -38,15 +76,16 @@ async def on_app_shutdown():
 # 	)
 # 	print(cafe)
 
+# 서버 -> lambda -> SQS -> lambda -> 서버
 
 # maching 요청을 받았을 때
 @app.post("/api/matching")
-async def postMachingMessage(machingReqDto : MachingReqDto):
+async def postMachingMessage(machingReqDto : MatchingReqDto):
 	lambda_url = os.environ["LAMBDA_URL"]
 	headers = { "Content-Type": "application/json" }
 	payload_json = json.dumps(machingReqDto)
 
-	response = requests.post(lambda_url, headers=headers, data=payload_json)
+	response = Request.post(lambda_url, headers=headers, data=payload_json)
 
 	if response.status_code == 200:
 		response_data = response.json()
@@ -55,58 +94,74 @@ async def postMachingMessage(machingReqDto : MachingReqDto):
 		return None
 
 
-@app.post("/api/maching/cafe")
-async def receiveMachingMessage(machingReqDto : MachingReqDto):
-	# TODO firebase로 유저애게 요청이 완료되었다고 알림
 
-	set = MessageSet("maching" + machingReqDto.userId)
+
+
+
+# 카페의 매칭 응답 요청
+@app.post("/api/maching/cafe")
+async def receiveMachingMessage(matchingReqDto : MatchingReqDto):
+	# SSE + 유저 ID에 넣으면 바로 되는 걸로
+	userPutSSEMessage(matchingReqDto.userId, matchingReqDto.cafeId)
+
+	# maching + 유저 Id와 관련된 것들을 가져옴
+	set = MessageSet("matching" + matchingReqDto.userId)
 	if (set.exist() == None):
-		return # 오류 코드
+		return 
+	
 	cafes = list(set.get_all())
 	set.delete()
 
 	for cafe in cafes:
-		# TODO firebase로 다른 카페들에게 요청이 완료되었다고 알림
-		print()
+		if cafe == matchingReqDto.cafeId:
+			continue
+		# 만약에 한번더 요청이 왔을 경우에는 front에서 자동으로 취소되도록 로직이 필요할 것 같음
+		cafeFastPutSSEMessage(cafe, matchingReqDto.userId, 'cancel')
 	
-	return ""
+	return 
 
-	
 
-# cafe에 예약 취소
+
+# 카페의 매칭 거절 요청
 @app.delete("/api/matching/cafe")
-async def rejectMachingMessage(matchingReqDto : MachingReqDto):
-	set = MessageSet(matchingReqDto.userId)
+async def rejectMachingMessage(matchingReqDto : MatchingReqDto):
+	# matching + 유저에서 하나를 카페를 뺀다
+	set = MessageSet("matching" + matchingReqDto.userId)
 	set.remove(matchingReqDto.cafeId)
+
+	# 만약에 maching 사이에 아무것도 없다면 아예 삭제하고, userId에게 삭제를 부여함
 	if set.delete_if_empty():
-		# TODO user에게 요청이 실패되었다고 알림
-		print()
+		userPutSSEMessage(matchingReqDto.userId, "cancel")
 	return
 
 
-# user가 취소
+# 유저의 매칭 취소 요청
 @app.delete("/api/matching/user")
-async def cancelMaching(machingCancelReqDto : MachingCancelReqDto):
+async def cancelMaching(matchingCancelReqDto : MatchingCancelReqDto):
 	collection = mongodb.client["cafe"]["maching"]
 	await collection.delete_one(
-		{"_id" : ObjectId(machingCancelReqDto.machingId)}
+		{"_id" : ObjectId(matchingCancelReqDto.machingId)}
 	)
-	# TODO cafe에게 요청이 취소되었다고 알림
+	# 매칭된 유저 Id를 보내서 카페에서 삭제하도록 함
+	cafeFastPutSSEMessage(matchingCancelReqDto.cafeId, matchingCancelReqDto.userId, "cancel")
 	return
 
 
 @app.post("/api/matching/lambda")
-async def postMatchingMessageToCafe(machingReqDto : MachingReqDto):
+async def postMatchingMessageToCafe(matchingReqDto : MatchingReqDto):
 	if postMatchingMessageToCafe.running:
 		return
 	postMatchingMessageToCafe.running = True
+
+	userId = matchingReqDto["userId"]
+	number = matchingReqDto["number"]
 
 	try:
 		collection = mongodb.client["cafe"]["cafe"]
 		
 		location = {
 			"type": "Point",
-			"coordinates": [machingReqDto.get("userLatitude"), machingReqDto.get("userLongitude")]
+			"coordinates": [matchingReqDto["userLatitude"], matchingReqDto["userLongitude"]]
 		}
 
 		cafes = await collection.find({
@@ -117,13 +172,20 @@ async def postMatchingMessageToCafe(machingReqDto : MachingReqDto):
 				}
 			}
 		})
-			
-		set = MessageSet("maching" + machingReqDto.get("userId"))
-
+		
+		new_set = MessageSet("maching" + matchingReqDto["userId"])
 		for cafe in cafes:
-			set.add(cafe.id)
-	# TODO 요청을 보내는 로직 필요 Firebase를 기준으로 필요함
+			cafeId = cafe["_id"]
+			new_set.add(cafeId)
+			cafePutSSEMessage(cafeId, userId, number)
+
+	
 	finally:
 		postMatchingMessageToCafe.running = False
+
+
+
 	
 postMatchingMessageToCafe.running = False
+
+
