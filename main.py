@@ -18,13 +18,17 @@ import os
 from bson.objectid import ObjectId
 import asyncio
 
-
+## 왜 gitpush가 안되는 걸깐
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 
 app = FastAPI()
+
+@app.on_event()
+def start():
+	print()
 
 # 초기 세팅
 @app.on_event("startup")
