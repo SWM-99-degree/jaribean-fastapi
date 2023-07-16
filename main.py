@@ -71,14 +71,14 @@ async def getSSEInfo( sseMessage : SSEMessage ):
 
 
 
-# @app.get("/api/db")
-# async def getDBTEST():
-# 	# 참고 자료
-# 	collection = mongodb.client["cafe"]["cafe"]
-# 	cafe = await collection.find_one(
-# 		{"_id" : ObjectId("64884c1d65989d25539387b5")}
-# 	)
-# 	print(cafe)
+@app.get("/api/db")
+async def getDBTEST():
+	# 참고 자료
+	collection = mongodb.client["cafe"]["cafe"]
+	cafe = await collection.find_one(
+		{"_id" : ObjectId("64884c1d65989d25539387b5")}
+	)
+	print(cafe)
 
 # 서버 -> lambda -> SQS -> lambda -> 서버
 
