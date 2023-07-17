@@ -70,6 +70,9 @@ async def getSSEInfo( sseMessage : SSEMessage ):
 # cafe3 (user, 2) x
 
 
+@app.get("api/test")
+async def getTest():
+	print("test clear!")
 
 @app.get("/api/db")
 async def getDBTEST():
