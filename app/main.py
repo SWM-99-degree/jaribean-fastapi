@@ -7,11 +7,10 @@ from sse_starlette import sse
 from sse_starlette.sse import EventSourceResponse
 from time import sleep
 
-
-from dto.requestDto import MatchingReqDto, MatchingCancelReqDto, SSEMessage
-from entity.Redis import MessageQueue, MessageSet
+from reqdto import requestDto
+from entity import Redis
 from entity import mongodb
-from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userFastPutSSEMessage, userPutSSEMessage, getSSEMessage
+from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
 
 import json
 import os
@@ -38,7 +37,7 @@ async def on_app_shutdown():
 
 
 @app.get("/stream")
-async def getSSEInfo( sseMessage : SSEMessage ):
+async def getSSEInfo( sseMessage : requestDto.SSEMessage ):
 	async def event_generator():
 		userId = json.dumps(userId)["userId"]
 		while True:
@@ -80,11 +79,10 @@ async def getDBTEST():
 	)
 	print(cafe)
 
-# 서버 -> lambda -> SQS -> lambda -> 서버
 
 # maching 요청을 받았을 때
 @app.post("/api/matching")
-async def postMachingMessage(machingReqDto : MatchingReqDto):
+async def postMachingMessage(machingReqDto : requestDto.MatchingReqDto):
 	lambda_url = os.environ["LAMBDA_URL"]
 	headers = { "Content-Type": "application/json" }
 	payload_json = json.dumps(machingReqDto)
@@ -104,12 +102,12 @@ async def postMachingMessage(machingReqDto : MatchingReqDto):
 
 # 카페의 매칭 응답 요청
 @app.post("/api/maching/cafe")
-async def receiveMachingMessage(matchingReqDto : MatchingReqDto):
+async def receiveMachingMessage(matchingReqDto : requestDto.MatchingReqDto):
 	# SSE + 유저 ID에 넣으면 바로 되는 걸로
 	userPutSSEMessage(matchingReqDto.userId, matchingReqDto.cafeId)
 
 	# maching + 유저 Id와 관련된 것들을 가져옴
-	set = MessageSet("matching" + matchingReqDto.userId)
+	set = Redis.MessageSet("matching" + matchingReqDto.userId)
 	if (set.exist() == None):
 		return 
 	
@@ -128,9 +126,9 @@ async def receiveMachingMessage(matchingReqDto : MatchingReqDto):
 
 # 카페의 매칭 거절 요청
 @app.delete("/api/matching/cafe")
-async def rejectMachingMessage(matchingReqDto : MatchingReqDto):
+async def rejectMachingMessage(matchingReqDto : requestDto.MatchingReqDto):
 	# matching + 유저에서 하나를 카페를 뺀다
-	set = MessageSet("matching" + matchingReqDto.userId)
+	set = Redis.MessageSet("matching" + matchingReqDto.userId)
 	set.remove(matchingReqDto.cafeId)
 
 	# 만약에 maching 사이에 아무것도 없다면 아예 삭제하고, userId에게 삭제를 부여함
@@ -141,7 +139,7 @@ async def rejectMachingMessage(matchingReqDto : MatchingReqDto):
 
 # 유저의 매칭 취소 요청
 @app.delete("/api/matching/user")
-async def cancelMaching(matchingCancelReqDto : MatchingCancelReqDto):
+async def cancelMaching(matchingCancelReqDto : requestDto.MatchingCancelReqDto):
 	collection = mongodb.client["cafe"]["maching"]
 	await collection.delete_one(
 		{"_id" : ObjectId(matchingCancelReqDto.machingId)}
@@ -152,7 +150,7 @@ async def cancelMaching(matchingCancelReqDto : MatchingCancelReqDto):
 
 
 @app.post("/api/matching/lambda")
-async def postMatchingMessageToCafe(matchingReqDto : MatchingReqDto):
+async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto):
 	if postMatchingMessageToCafe.running:
 		return
 	postMatchingMessageToCafe.running = True
@@ -177,7 +175,7 @@ async def postMatchingMessageToCafe(matchingReqDto : MatchingReqDto):
 			}
 		})
 		
-		new_set = MessageSet("maching" + matchingReqDto["userId"])
+		new_set = Redis.MessageSet("maching" + matchingReqDto["userId"])
 		for cafe in cafes:
 			cafeId = cafe["_id"]
 			new_set.add(cafeId)
