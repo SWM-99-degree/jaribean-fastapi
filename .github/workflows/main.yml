@@ -8,7 +8,7 @@ on:
 env:
   DOCKER_IMAGE: ghcr.io/swm-99-degree/jaribean-fastapi
   VERSION: ${{ github.sha }}
-  NAME: jaribean-mathing
+  NAME: jaribean-matching
   # Docker image 를 ghcr.io 에 올릴 때 우리의github이름/이미지이름 으로 저장한다. 이미지이름을 정해주면 된다.
   # Docker image 의 이름을 superman 이라고 해놓은 것. 이름 뭐할지 정하면 된다.
 
