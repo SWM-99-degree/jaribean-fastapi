@@ -64,4 +64,4 @@ jobs:
       - name: Docker run
         run: |
           docker stop ${{ env.NAME }} && docker rm ${{ env.NAME }} && docker rmi ${{ env.DOCKER_IMAGE }}:latest
-          docker run -d -p 3000:3000 --name superman --restart always ${{ env.DOCKER_IMAGE }}:latest
+          docker run -d -p 3000:3000 --name jaribean-matching --restart always ${{ env.DOCKER_IMAGE }}:latest
