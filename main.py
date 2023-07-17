@@ -26,9 +26,6 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = FastAPI()
 
-@app.on_event()
-def start():
-	print()
 
 # 초기 세팅
 @app.on_event("startup")
