@@ -2,7 +2,7 @@ name: Deploy fastAPI server
 
 on:
   push:
-    branches: [ matching ]
+    branches: [ main ]
     # 무슨 브랜치가 업데이트 될 때 Actions 를 작동시킬지 적는다.
 
 env:
