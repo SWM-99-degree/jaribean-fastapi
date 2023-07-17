@@ -2,9 +2,12 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
 from odmantic import AIOEngine
 import certifi
+import os
 
-# 소중한 Secrets.json 가져오기
-from config.MongoConfig import MONGO_DB_URL
+from dotenv import load_dotenv
+from pathlib import Path
+
+
 
 ca = certifi.where()
 class MongoDB:
