@@ -66,9 +66,11 @@ async def getSSEInfo( sseMessage : requestDto.SSEMessage ):
 # cafe3 (user, 2) x
 
 
-@app.get("api/test")
+@app.get("/api/test")
 async def getTest():
-	print("test clear!")
+	redis = Redis.MessageSet("new")
+	redis.add("hello")
+	print(redis)
 
 @app.get("/api/db")
 async def getDBTEST():

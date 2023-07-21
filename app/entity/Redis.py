@@ -1,15 +1,19 @@
 import redis
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Redis:
     def __init__(self, name):
         self.name = name
-        self.redis = redis.Redis(host='localhost', port=6379, db=0)
+        self.redis = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
 
 
 class MessageSet:
     def __init__(self, name):
         self.name = name
-        self.redis = redis.Redis(host='localhost', port=6379, db=0)
+        self.redis = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
 
     def exist(self, *items): 
         if self.redis.exists(self.name):
@@ -42,10 +46,10 @@ class MessageSet:
     def delete(self):
         self.redis.delete(self.name)
 
-class MessageQueue(object):
-    def __init__(self, **redis_kwargs):
-        self.key = "machingQueue"
-        self.rq = redis.Redis(**redis_kwargs)
+class MessageQueue:
+    def __init__(self, name):
+        self.key = name
+        self.rq = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
 
     def size(self): # 큐 크기 확인
         return self.rq.llen(self.key)
