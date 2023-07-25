@@ -53,7 +53,7 @@ async def getSSEInfo(userId : str = Depends(verify_jwt_token)):
 			Message = getSSEMessage(userId)
 			if Message:
 				yield Message# SSE 이벤트 생성
-			await asyncio.sleep(5)
+			await asyncio.sleep(3)
 	return EventSourceResponse(event_generator())
 	
 
