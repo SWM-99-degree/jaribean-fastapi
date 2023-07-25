@@ -7,15 +7,14 @@ from geojson import Point
 from enum.Enum import UserRole
 
 class Matching(BaseModel):
-    id : str = Field(alias = "_id")
     userId : str
     cafeId : str
     number : int
-    matchingTime : datetime
+    matchingTime : datetime = Field(default_factory=datetime.now)
+
 
 
 class User(BaseModel):
-    id : str = Field(alias = "_id")
     userName : str
     userNickname : str
     userRole : UserRole
@@ -25,7 +24,6 @@ class User(BaseModel):
 
 
 class Cafe(BaseModel):
-    id : str = Field(alias = "_id")
     cafeName : str
     cafePhoneNumber : str
     cafeAddress : str

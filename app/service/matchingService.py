@@ -17,10 +17,6 @@ def cafeFastPutSSEMessage(userId, putId, direction):
     getSSEfromRedis.fastput((putId, direction))
 
 
-def userFastPutSSEMessage(userId, putId):
-    getSSEfromRedis = MessageQueue("SSE" + userId)
-    getSSEfromRedis.fastput(putId)
-
 
     # 만약 PutId가 cancel이라면 삭제
 
