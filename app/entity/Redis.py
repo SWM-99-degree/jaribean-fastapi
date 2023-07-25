@@ -23,6 +23,8 @@ class MessageSet:
         else:
             return None
 
+    def pop(self):
+        return self.redis.spop(self.name)
 
     def add(self, *items):
         return self.redis.sadd(self.name, *items)
@@ -67,6 +69,7 @@ class MessageQueue:
         if isBlocking:
             element = self.rq.brpop(self.key, timeout=timeout) # blocking right pop
             element = element[1] # key[0], value[1]
+            print(0)
         else:
             element = self.rq.rpop(self.key) # right pop
         return element
