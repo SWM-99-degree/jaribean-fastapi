@@ -10,13 +10,15 @@ from dotenv import load_dotenv
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, "jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"))
 
+token_domain = "Token:"
 cred_path = "../jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"
 cred = credentials.Certificate(cred_path)
 firebase_admin.initialize_app(cred)
 
 
 async def sendingAcceptMessageToUserFromCafe(userId, matchingId, cafeId):
-    userToken = Redis.Redis(userId).getToken()
+    global token_domain
+    userToken = Redis.Redis(token_domain+userId).getToken()
 
     sendFCM = messaging.Message(
         data = { "userId" : userId,
@@ -30,7 +32,8 @@ async def sendingAcceptMessageToUserFromCafe(userId, matchingId, cafeId):
 
 
 async def sendingCancelMessageToUser(userId):
-    userToken = Redis.Redis(userId).getToken()
+    global token_domain
+    userToken = Redis.Redis(token_domain+userId).getToken()
 
     sendFCM = messaging.Message(
         data = { "userId" : userId,
@@ -41,7 +44,8 @@ async def sendingCancelMessageToUser(userId):
     response = messaging.send(sendFCM)
 
 async def sendingCancelMessageToCafeFromUserAfterMatching(cafeId, matchingId):
-    userToken = Redis.Redis(cafeId).getToken()
+    global token_domain
+    userToken = Redis.Redis(token_domain+cafeId).getToken()
 
     sendFCM = messaging.Message(
         data = {"userId" : matchingId,
@@ -52,7 +56,8 @@ async def sendingCancelMessageToCafeFromUserAfterMatching(cafeId, matchingId):
 
 
 async def sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, userId):
-    userToken = Redis.Redis(cafeId).getToken()
+    global token_domain
+    userToken = Redis.Redis(token_domain+cafeId).getToken()
 
     sendFCM = messaging.Message(
         data = {"userId" : userId,
@@ -63,7 +68,8 @@ async def sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, userId):
 
 
 async def sendingMatchingMessageToCafe(cafeId, userId, peopleNumber):
-    userToken = Redis.Redis(cafeId).getToken()
+    global token_domain
+    userToken = Redis.Redis(token_domain+cafeId).getToken()
 
     sendFCM = messaging.Message(
         data = {"userId" : userId,

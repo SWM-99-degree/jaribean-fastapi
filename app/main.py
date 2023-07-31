@@ -41,9 +41,9 @@ async def verify_jwt_token(token:str = Header("ACCESS_AUTHORIZATION")):
         payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS256"])
         return payload["userId"]
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
+        raise HTTPException(status_code=401, detail="토큰이 만료되었습니다.")
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="토큰이 알맞지 않습니다.")
 
 
 @app.on_event("startup")
@@ -94,7 +94,7 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto): #, us
 	userId = "123"
 	set = Redis.MessageSet("matching" + userId)
 	if set.exist():
-		return None
+		raise HTTPException(status_code=400, detail= "이미 요청 대기 중입니다.")
 	
 	lambda_url = os.environ["LAMBDA_URL"]
 	headers = {"Content-Type": "application/json"}
@@ -136,7 +136,7 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	
 	for cafeId in cafes:
 		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, matchingReqDto.userId)
-	return 
+	return {"status": 1, "message": "요청에 성공했습니다!"}
 
 
 
@@ -150,7 +150,7 @@ async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, 
 	if set.delete_if_empty():
 		sendingCancelMessageToUser(matchingReqDto.userId)
 		
-	return
+	return {"status": 1, "message": "매칭 거절에 성공했습니다!"}
 
 
 # 유저의 매칭 취소 요청 - 매칭되기 이전
@@ -162,6 +162,7 @@ async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 	for cafeId in cafes:
 		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, userId)
 	set.delete()
+	return {"status": 1, "message": "매칭 거절에 성공했습니다!"}
 
 
 # 유저의 매칭 취소 요청 - 매칭된 이후
@@ -178,15 +179,16 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 	sendingCancelMessageToCafeFromUserAfterMatching(matching["cafeId"], matchingCancelReqDto.matchingId)
 
 	if current_time - matching["matchingTime"] > 90:
-		return "과금이 부과되었습니다."
+		# 추가적으로 결제가 되도록 하는 코드 필요
+		return {"status": 1, "message": "매칭 거절에 성공했습니다! 보증금이 환급되지 않습니다."}
 	else:
-		return "과금 없이 취소되었습니다."
+		return {"status": 1, "message": "매칭 거절에 성공했습니다! 보증금이 환급됩니다."}
 
 
 @app.post("/api/matching/lambda")
 async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
 	if postMatchingMessageToCafe.running:
-		return
+		raise HTTPException(status_code=400, detail= "이미 매칭이 진행 중입니다.")
 	
 	postMatchingMessageToCafe.running = True
 	number = matchingReqDto.peopleNumber
@@ -216,10 +218,8 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
 			new_set.add(cafeId)
 			sendingMatchingMessageToCafe(cafeId, userId, number)
 			#cafePutSSEMessage(cafeId, userId, number)
-	
+		return {"status": 1, "message": "매칭 요청에 성공했습니다!"}
 	finally:
 		postMatchingMessageToCafe.running = False
 
 postMatchingMessageToCafe.running = False
-
-
