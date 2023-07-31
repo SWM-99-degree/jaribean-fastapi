@@ -1,12 +1,14 @@
 import sys
 import os
+import json
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from entity.Redis import MessageQueue
 
 
+# 카페에게 주는 것
 def cafePutSSEMessage(userId, putId, direction):
     getSSEfromRedis = MessageQueue("SSE" + userId)
-    getSSEfromRedis.put((putId, direction))
+    getSSEfromRedis.put(json.dumps({"id" : putId, "direction" : direction}))
 
 def userPutSSEMessage(userId, putId):
     getSSEfromRedis = MessageQueue("SSE" + userId)
