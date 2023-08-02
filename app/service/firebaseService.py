@@ -16,6 +16,11 @@ cred = credentials.Certificate(cred_path)
 firebase_admin.initialize_app(cred)
 
 
+def testCode(token):
+    # sendFCM1 = messaging.Message(notification= {"answer": "졸리다"}, token = token)
+    sendFCM = messaging.Message(data = {"title":"안녕", "description":"안녕ㅇㅇㅇㅇㅇ"}, token = token)
+    response = messaging.send(sendFCM)
+
 async def sendingAcceptMessageToUserFromCafe(userId, matchingId, cafeId):
     global token_domain
     userToken = Redis.Redis(token_domain+userId).getToken()

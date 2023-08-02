@@ -15,7 +15,7 @@ from entity import Redis, Documents
 from entity import mongodb
 from reqdto import requestDto
 from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
-from service.firebaseService import sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
+from service.firebaseService import testCode, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
 
 import json
 import os
@@ -74,9 +74,9 @@ async def on_app_shutdown():
 # 초기 세팅
 @app.get("/api/test")
 async def getTest():
-	redis = Redis.MessageSet("new")
-	redis.add("hello")
-	print(redis)
+	token = "eiMZvMU4TvCk4BNeUEHBoz:APA91bG6uf_mg9I70YslVe4E6nOvrP6pvFkZ8BVIF-8YDnfqYM0tLNQYtMG6pVFdaHCBWWwEbsRBZg5GJ4MHp6RBTgufDOrXovJYxz53xGPWTXpLAEbfTtTmTXV7dtKR8PDENqpOPF74"
+	testCode(token)
+	
 
 # @app.get("/api/db")
 # def getDBTEST():
@@ -90,7 +90,7 @@ async def getTest():
 
 # matching 요청을 받았을 때
 @app.post("/api/matching")
-async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto): #, userId : str = Depends(verify_jwt_token)):
+async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
 	userId = "123"
 	set = Redis.MessageSet("matching" + userId)
 	if set.exist():
@@ -115,7 +115,7 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto): #, us
 # SSE 버전 userPutSSEMessage(matchingReqDto.userId, (matchingReqDto.cafeId, result.inserted_id))
 @app.post("/api/matching/cafe")
 async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, cafeId : str = Depends(verify_jwt_token)):
-
+	
 	set = Redis.MessageSet("matching" + matchingReqDto.userId)
 	if (set.exist() == None):
 		raise HTTPException(status_code=400, detail="이미 매칭이 되었습니다.")
@@ -187,6 +187,7 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 
 @app.post("/api/matching/lambda")
 async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
+	print(userId)
 	if postMatchingMessageToCafe.running:
 		raise HTTPException(status_code=400, detail= "이미 매칭이 진행 중입니다.")
 	
