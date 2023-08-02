@@ -8,6 +8,8 @@ class Redis:
     def __init__(self, name):
         self.name = name
         self.redis = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
+    def getToken(self):
+        return self.redis.hget("firebaseToken") # 토큰을 어떻게 저장하나요?
 
 
 class MessageSet:
@@ -69,7 +71,6 @@ class MessageQueue:
         if isBlocking:
             element = self.rq.brpop(self.key, timeout=timeout) # blocking right pop
             element = element[1] # key[0], value[1]
-            print(0)
         else:
             element = self.rq.rpop(self.key) # right pop
         return element

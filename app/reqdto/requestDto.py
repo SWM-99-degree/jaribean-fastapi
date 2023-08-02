@@ -12,5 +12,5 @@ class MatchingCafeReqDto(BaseModel):
     userId : str
 
 class MatchingCancelReqDto(BaseModel):
-    machingId : str = None
+    matchingId : str = None
     cafeId : str
