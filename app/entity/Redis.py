@@ -4,18 +4,26 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+class EventListenerRedis:
+    def __init__(self):
+        self.redis = redis.StrictRedis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
+
 class Redis:
     def __init__(self, name):
         self.name = name
         self.redis = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
     def getToken(self):
-        return self.redis.hget("firebaseToken") # 토큰을 어떻게 저장하나요?
+        return self.redis.hget(self.name, "firebaseToken")
 
 
 class MessageSet:
     def __init__(self, name):
         self.name = name
         self.redis = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
+        
+    def expire(self):
+        self.redis.config_set('notify-keyspace-events', 'Ex')
+        return self.redis.expire(self.name, 300)
 
     def exist(self, *items): 
         if self.redis.exists(self.name):
