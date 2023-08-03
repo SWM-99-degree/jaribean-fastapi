@@ -17,11 +17,13 @@ from reqdto import requestDto
 from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
 from service.firebaseService import testCode, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
 
+import threading
 import json
 import os
 from bson.objectid import ObjectId
 import asyncio
 import datetime
+import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -45,10 +47,28 @@ async def verify_jwt_token(token:str = Header("ACCESS_AUTHORIZATION")):
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="토큰이 알맞지 않습니다.")
 
+def expireCallBack(message):
+	userId = message["data"].decode("utf-8")[8:]
+	sendingCancelMessageToUser(userId)
+	
+
+
+async def listenExpireEvents():
+	redis = Redis.EventListenerRedis()
+	redisSubscriber = redis.redis.pubsub()
+	redisSubscriber.psubscribe(**{"__keyevent@0__:*": expireCallBack})
+	
+	for message in redisSubscriber.listen():
+		
+		pass
+
+def start_listening():
+    asyncio.run(listenExpireEvents())
 
 @app.on_event("startup")
 def on_app_start():
 	mongodb.connect()
+	threading.Thread(target=start_listening, daemon=True).start()
 
 @app.on_event("shutdown")
 async def on_app_shutdown():
@@ -91,7 +111,7 @@ async def getTest():
 # matching 요청을 받았을 때
 @app.post("/api/matching")
 async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
-	userId = "123"
+	
 	set = Redis.MessageSet("matching" + userId)
 	if set.exist():
 		raise HTTPException(status_code=400, detail= "이미 요청 대기 중입니다.")
@@ -155,7 +175,7 @@ async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, 
 
 # 유저의 매칭 취소 요청 - 매칭되기 이전
 # cafeFastPutSSEMessage(cafeId, userId, 'cancel')
-@app.delete("/api/matching/user")
+@app.delete("/api/matching/before")
 async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 	set = Redis.MessageSet("matching" + userId)
 	cafes = list(set.get_all())
@@ -167,7 +187,7 @@ async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 
 # 유저의 매칭 취소 요청 - 매칭된 이후
 # cafeFastPutSSEMessage(matchingCancelReqDto.cafeId, userId, "cancel")
-@app.delete("/api/matching/user")
+@app.delete("/api/matching/after")
 async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["cafe"]["matching"]
 	
@@ -187,7 +207,7 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 
 @app.post("/api/matching/lambda")
 async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
-	print(userId)
+	
 	if postMatchingMessageToCafe.running:
 		raise HTTPException(status_code=400, detail= "이미 매칭이 진행 중입니다.")
 	
@@ -203,7 +223,7 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
         		"$near": {
             		"$geometry": {
                 		"type" : "Point",
-                		"coordinates" : [matchingReqDto.latitude, matchingReqDto.longitude]
+                		"coordinates" : [126.661675911488, 37.450979037492]  #[matchingReqDto.latitude, matchingReqDto.longitude]
             		},
             		"$maxDistance": 700
         		}
@@ -213,12 +233,17 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
 		cafes = collection.find(query)
 		
 		new_set = Redis.MessageSet("matching" + userId)
+		
 
 		for cafe in cafes:
 			cafeId = str(cafe["_id"])
 			new_set.add(cafeId)
-			sendingMatchingMessageToCafe(cafeId, userId, number)
+			try:
+				await sendingMatchingMessageToCafe(cafeId, userId, number)
+			except:
+				print("토큰이 없습니다.")
 			#cafePutSSEMessage(cafeId, userId, number)
+		new_set.expire()
 		return {"status": 1, "message": "매칭 요청에 성공했습니다!"}
 	finally:
 		postMatchingMessageToCafe.running = False
