@@ -277,7 +277,7 @@ async def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str 
 
 # TODO COMPLETE
 @app.put("api/matching/complete")
-async def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
+async def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["cafe"]["matching"]
 	new_data = {
     	"$set": {
