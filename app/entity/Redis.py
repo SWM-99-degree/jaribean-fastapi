@@ -23,7 +23,7 @@ class MessageSet:
         
     def expire(self):
         self.redis.config_set('notify-keyspace-events', 'Ex')
-        return self.redis.expire(self.name, 300)
+        return self.redis.expire(self.name, 5)
 
     def exist(self, *items): 
         if self.redis.exists(self.name):
