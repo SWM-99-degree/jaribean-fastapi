@@ -15,7 +15,7 @@ from entity import Redis, Documents
 from entity import mongodb
 from reqdto import requestDto
 from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
-from service.firebaseService import testCode, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
+from service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
 
 import threading
 import json
@@ -89,15 +89,6 @@ async def on_app_shutdown():
 # 				yield reponse_data
 # 			await asyncio.sleep(3)
 # 	return EventSourceResponse(event_generator(), content_type='text/event-stream')
-	
-
-# 초기 세팅
-@app.get("/api/test")
-async def getTest():
-	token = "eiMZvMU4TvCk4BNeUEHBoz:APA91bG6uf_mg9I70YslVe4E6nOvrP6pvFkZ8BVIF-8YDnfqYM0tLNQYtMG6pVFdaHCBWWwEbsRBZg5GJ4MHp6RBTgufDOrXovJYxz53xGPWTXpLAEbfTtTmTXV7dtKR8PDENqpOPF74"
-	testCode(token)
-	
-
 # @app.get("/api/db")
 # def getDBTEST():
 # 	# 참고 자료
@@ -107,6 +98,15 @@ async def getTest():
 # 	)
 # 	print(cafe)
 
+
+	
+
+# 초기 세팅
+@app.get("/api/test")
+async def getTest():
+	token = "eiMZvMU4TvCk4BNeUEHBoz:APA91bG6uf_mg9I70YslVe4E6nOvrP6pvFkZ8BVIF-8YDnfqYM0tLNQYtMG6pVFdaHCBWWwEbsRBZg5GJ4MHp6RBTgufDOrXovJYxz53xGPWTXpLAEbfTtTmTXV7dtKR8PDENqpOPF74"
+	testCode(token)
+	
 
 # matching 요청을 받았을 때
 @app.post("/api/matching")
@@ -145,10 +145,12 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 
 	collection = mongodb.client["cafe"]["matching"]
 
+	# TODO status 필요함
 	matching = Documents.Matching(
 		userId = matchingReqDto.userId,
    		cafeId = cafeId,
-		number = matchingReqDto.peopleNumber
+		number = matchingReqDto.peopleNumber,
+		status = Documents.Status("PROCESSING")
 	)
 	result = collection.insert_one(matching.dict)
 
@@ -187,13 +189,16 @@ async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 
 # 유저의 매칭 취소 요청 - 매칭된 이후
 # cafeFastPutSSEMessage(matchingCancelReqDto.cafeId, userId, "cancel")
-@app.delete("/api/matching/after")
+@app.put("/api/matching/after")
 async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["cafe"]["matching"]
 	
-	matching = collection.delete_one(
-		{"_id" : ObjectId(matchingCancelReqDto.matchingId)}
-	)
+	new_data = {
+    	"$set": {
+        	"status": "CANCEL",
+    	}	
+	}
+	matching = collection.update_one({"_id": ObjectId(matchingCancelReqDto.matchingId)}, new_data)
 
 	current_time = datetime.datetime.now()
 	sendingCancelMessageToCafeFromUserAfterMatching(matching["cafeId"], matchingCancelReqDto.matchingId)
@@ -206,8 +211,8 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 
 
 @app.post("/api/matching/lambda")
-async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
-	
+async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto):#, userId : str = Depends(verify_jwt_token)):
+	userId = "123"
 	if postMatchingMessageToCafe.running:
 		raise HTTPException(status_code=400, detail= "이미 매칭이 진행 중입니다.")
 	
@@ -223,7 +228,7 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
         		"$near": {
             		"$geometry": {
                 		"type" : "Point",
-                		"coordinates" : [126.661675911488, 37.450979037492]  #[matchingReqDto.latitude, matchingReqDto.longitude]
+                		"coordinates" :[matchingReqDto.latitude, matchingReqDto.longitude] #[126.661675911488, 37.450979037492] 
             		},
             		"$maxDistance": 700
         		}
@@ -249,3 +254,36 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
 		postMatchingMessageToCafe.running = False
 
 postMatchingMessageToCafe.running = False
+
+
+# TODO NOSHOW - COMPLETE 인지를 무조건 확인해야 함
+@app.put("api/matching/noshow")
+async def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
+	collection = mongodb.client["cafe"]["matching"]
+	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
+	if result.status != "PROCESSING":
+		raise HTTPException(status_code=400, detail= "매칭에 대한 처리가 이미 진행되었습니다.")
+	
+	new_data = {
+    	"$set": {
+        	"status": "NOSHOW",
+    	}
+	}
+	collection.update_one({"_id": ObjectId(matchingReq.matchingId)}, new_data)
+	return {"status": 1, "message": "노쇼 설정이 되었습니다!"}
+
+
+
+
+# TODO COMPLETE
+@app.put("api/matching/complete")
+async def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
+	collection = mongodb.client["cafe"]["matching"]
+	new_data = {
+    	"$set": {
+        	"status": "COMPLETE",
+    	}
+	}
+	collection.update_one({"_id": ObjectId(matchingReq.matchingId)}, new_data)
+	sendingCompleteMessageToCafe(userId, matchingReq.matchingId, matchingReq.cafeId)
+	return {"status": 1, "message": "매칭이 성사되어 종료되었습니다!"}
