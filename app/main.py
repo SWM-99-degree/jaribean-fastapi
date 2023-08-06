@@ -16,6 +16,7 @@ from entity import mongodb
 from reqdto import requestDto
 from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
 from service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
+from service.sqsService import send_messages
 
 import threading
 import json
@@ -104,8 +105,13 @@ async def on_app_shutdown():
 # 초기 세팅
 @app.get("/api/test")
 async def getTest():
-	token = "eiMZvMU4TvCk4BNeUEHBoz:APA91bG6uf_mg9I70YslVe4E6nOvrP6pvFkZ8BVIF-8YDnfqYM0tLNQYtMG6pVFdaHCBWWwEbsRBZg5GJ4MHp6RBTgufDOrXovJYxz53xGPWTXpLAEbfTtTmTXV7dtKR8PDENqpOPF74"
-	testCode(token)
+	data = {"name" : "yoHO!"}
+	msg = json.dumps(data)
+	send_messages(msg)
+
+@app.get("/api/test/test")
+async def receivedTest():
+	print("test clear!")
 	
 
 # matching 요청을 받았을 때
@@ -117,17 +123,17 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 		raise HTTPException(status_code=400, detail= "이미 요청 대기 중입니다.")
 	
 	lambda_url = os.environ["LAMBDA_URL"]
-	headers = {"Content-Type": "application/json"}
+
+	matchingReqDto["userId"] = userId
+	matchingReqDto["token"] = Header("ACCESS_AUTHORIZATION")
 	payload_json = json.dumps(matchingReqDto)
-	payload_json["userId"] = userId
 
-	response = Request.post(lambda_url, headers=headers, data=payload_json)
+	response_data = send_messages(payload_json)
 
-	if response.status_code == 200:
-		response_data = response.json()
-		return response_data
+	if response_data == None:
+		raise HTTPException(status_code=405, detail="SQS 작동 오류")
 	else:
-		return None
+		return {"status": 1, "message": "요청이 진행중입니다."}
 
 
 
