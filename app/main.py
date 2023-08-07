@@ -105,7 +105,8 @@ async def on_app_shutdown():
 # 초기 세팅
 @app.get("/api/test")
 async def getTest():
-	data = {"name" : "yoHO!"}
+	data = {"name" : "yoHO!",
+	 		"token" : 123123213}
 	msg = json.dumps(data)
 	send_messages(msg)
 
