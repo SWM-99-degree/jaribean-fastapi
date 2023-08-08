@@ -14,8 +14,9 @@ class Status(str, Enum):
     NOSHOW : "NOSHOW"
 
 class Matching(BaseModel):
+    id : str
     userId : str
-    cafeId : str
+    cafe: Cafe
     number : int
     matchingTime : datetime = Field(default_factory=datetime.now)
     status : Status
@@ -23,6 +24,7 @@ class Matching(BaseModel):
 
 
 class User(BaseModel):
+    id : str
     userName : str
     userNickname : str
     #userRole : UserRole
@@ -32,10 +34,12 @@ class User(BaseModel):
 
 
 class Cafe(BaseModel):
+    id : str
     name : str
     phoneNumber : str
     address : str
     imageUrl : str
+    instagramUrl : str
     coordinate : Point
     #userRole : UserRole
     createdAt : datetime

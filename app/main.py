@@ -60,7 +60,6 @@ async def listenExpireEvents():
 	redisSubscriber.psubscribe(**{"__keyevent@0__:*": expireCallBack})
 	
 	for message in redisSubscriber.listen():
-		
 		pass
 
 def start_listening():
@@ -74,31 +73,6 @@ def on_app_start():
 @app.on_event("shutdown")
 async def on_app_shutdown():
 	mongodb.close()
-
-
-# @app.get("/api/stream")
-# async def getSSEInfo(userId : str = Depends(verify_jwt_token)):
-# 	async def event_generator():
-# 		while True:
-# 			Message = getSSEMessage(userId)
-# 			if Message:
-# 				response = {
-# 				"userId" : Message[0],
-# 				"direction" : Message[1]
-# 				}
-# 				reponse_data = json.dumps(response)
-# 				yield reponse_data
-# 			await asyncio.sleep(3)
-# 	return EventSourceResponse(event_generator(), content_type='text/event-stream')
-# @app.get("/api/db")
-# def getDBTEST():
-# 	# 참고 자료
-# 	collection = mongodb.client["cafe"]["cafe"]
-# 	cafe = collection.find_one(
-# 		{"_id" : ObjectId("64884c1d65989d25539387b5")}
-# 	)
-# 	print(cafe)
-
 
 	
 
@@ -122,8 +96,6 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 	set = Redis.MessageSet("matching" + userId)
 	if set.exist():
 		raise HTTPException(status_code=400, detail= "이미 요청 대기 중입니다.")
-	
-	lambda_url = os.environ["LAMBDA_URL"]
 
 	matchingReqDto["userId"] = userId
 	matchingReqDto["token"] = Header("ACCESS_AUTHORIZATION")
@@ -150,18 +122,21 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	cafes = list(set.get_all())
 	set.delete()
 
-	collection = mongodb.client["cafe"]["matching"]
+	collection = mongodb.client["cafe"]["cafe"]
+	cafe = collection.find_one({"userId": cafeId})
 
+	collection = mongodb.client["cafe"]["matching"]
+	
 	# TODO status 필요함
 	matching = Documents.Matching(
 		userId = matchingReqDto.userId,
-   		cafeId = cafeId,
+   		cafe = cafe,
 		number = matchingReqDto.peopleNumber,
 		status = Documents.Status("PROCESSING")
 	)
 	result = collection.insert_one(matching.dict)
 
-	sendingAcceptMessageToUserFromCafe(matchingReqDto.userId, result.inserted_id,  cafeId)
+	sendingAcceptMessageToUserFromCafe(matchingReqDto.userId, result.inserted_id, cafeId)
 	
 	for cafeId in cafes:
 		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, matchingReqDto.userId)
@@ -183,7 +158,6 @@ async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, 
 
 
 # 유저의 매칭 취소 요청 - 매칭되기 이전
-# cafeFastPutSSEMessage(cafeId, userId, 'cancel')
 @app.delete("/api/matching/before")
 async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 	set = Redis.MessageSet("matching" + userId)
@@ -195,7 +169,6 @@ async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 
 
 # 유저의 매칭 취소 요청 - 매칭된 이후
-# cafeFastPutSSEMessage(matchingCancelReqDto.cafeId, userId, "cancel")
 @app.put("/api/matching/after")
 async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["cafe"]["matching"]
@@ -248,7 +221,7 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto):
 		
 
 		for cafe in cafes:
-			cafeId = str(cafe["_id"])
+			cafeId = str(cafe["userId"])
 			new_set.add(cafeId)
 			try:
 				await sendingMatchingMessageToCafe(cafeId, userId, number)
