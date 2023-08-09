@@ -64,6 +64,7 @@ async def listenExpireEvents():
 
 def start_listening():
     asyncio.run(listenExpireEvents())
+    
 
 @app.on_event("startup")
 def on_app_start():
@@ -191,8 +192,7 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 
 
 @app.post("/api/matching/lambda")
-async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto):#, userId : str = Depends(verify_jwt_token)):
-	userId = "123"
+async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
 	if postMatchingMessageToCafe.running:
 		raise HTTPException(status_code=400, detail= "이미 매칭이 진행 중입니다.")
 	

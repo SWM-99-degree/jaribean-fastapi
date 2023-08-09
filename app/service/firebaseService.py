@@ -65,15 +65,15 @@ def sendingCancelMessageToUser(userId):
     global token_domain
     userToken = Redis.Redis(token_domain+userId).getToken()
     sendFCM = messaging.Message(
-        data = { 
+        data = {
             "data" : {
             "userId" : userId,
             "direction" : "cancel"
             },
             "type" : "data"
         },
-        token = userToken
-    )
+        token = userToken)
+
     response = messaging.send(sendFCM)
 
 def sendingCancelMessageToCafeFromUserAfterMatching(cafeId, matchingId):
