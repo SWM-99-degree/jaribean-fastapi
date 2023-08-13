@@ -64,7 +64,7 @@ jobs:
       - name: Docker run
         run: |
           docker stop ${{ env.NAME }} && docker rm ${{ env.NAME }} && docker rmi ${{ env.DOCKER_IMAGE }}:latest
-          docker create -d -p 3000:3000 --name ${{ env.NAME }} ${{ env.DOCKER_IMAGE }}:latest
-          docker cp fastAPI_env/.env ${{ env.NAME }}:/.env
+          docker create -p 3000:3000 --name ${{ env.NAME }} ${{ env.DOCKER_IMAGE }}:latest
+          docker cp fastAPI_env/.env ${{ env.NAME }}:
           docker cp fastAPI_env/fb_key.json ${{ env.NAME }}:/jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json
           docker start ${{ env.NAME }}
