@@ -239,7 +239,7 @@ postMatchingMessageToCafe.running = False
 
 
 # TODO NOSHOW - COMPLETE 인지를 무조건 확인해야 함
-@app.put("api/matching/noshow")
+@app.put("/api/matching/noshow")
 async def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["cafe"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
@@ -258,7 +258,7 @@ async def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str 
 
 
 # TODO COMPLETE
-@app.put("api/matching/complete")
+@app.put("/api/matching/complete")
 async def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["cafe"]["matching"]
 	new_data = {
