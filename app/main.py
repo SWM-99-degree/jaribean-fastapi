@@ -11,11 +11,12 @@ from bson.son import SON
 import jwt
 
 
-from entity import Redis, Documents
-from entity import mongodb
-from reqdto import requestDto
-from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
-from service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
+from .entity import Redis, Documents
+from .entity import mongodb
+from .reqdto import requestDto
+from .service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
+from .service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
+from .service.sqsService import send_messages
 
 import threading
 import json
@@ -31,6 +32,8 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 app = FastAPI()
 
 from fastapi.middleware.cors import CORSMiddleware
+
+# TODO changed
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -59,11 +62,11 @@ async def listenExpireEvents():
 	redisSubscriber.psubscribe(**{"__keyevent@0__:*": expireCallBack})
 	
 	for message in redisSubscriber.listen():
-		
 		pass
 
 def start_listening():
     asyncio.run(listenExpireEvents())
+    
 
 @app.on_event("startup")
 def on_app_start():
@@ -74,38 +77,19 @@ def on_app_start():
 async def on_app_shutdown():
 	mongodb.close()
 
-
-# @app.get("/api/stream")
-# async def getSSEInfo(userId : str = Depends(verify_jwt_token)):
-# 	async def event_generator():
-# 		while True:
-# 			Message = getSSEMessage(userId)
-# 			if Message:
-# 				response = {
-# 				"userId" : Message[0],
-# 				"direction" : Message[1]
-# 				}
-# 				reponse_data = json.dumps(response)
-# 				yield reponse_data
-# 			await asyncio.sleep(3)
-# 	return EventSourceResponse(event_generator(), content_type='text/event-stream')
-# @app.get("/api/db")
-# def getDBTEST():
-# 	# 참고 자료
-# 	collection = mongodb.client["cafe"]["cafe"]
-# 	cafe = collection.find_one(
-# 		{"_id" : ObjectId("64884c1d65989d25539387b5")}
-# 	)
-# 	print(cafe)
-
-
 	
 
 # 초기 세팅
 @app.get("/api/test")
 async def getTest():
-	token = "eiMZvMU4TvCk4BNeUEHBoz:APA91bG6uf_mg9I70YslVe4E6nOvrP6pvFkZ8BVIF-8YDnfqYM0tLNQYtMG6pVFdaHCBWWwEbsRBZg5GJ4MHp6RBTgufDOrXovJYxz53xGPWTXpLAEbfTtTmTXV7dtKR8PDENqpOPF74"
-	testCode(token)
+	data = {"name" : "yoHO!",
+	 		"token" : 123123213}
+	msg = json.dumps(data)
+	send_messages(msg)
+
+@app.get("/api/test/test")
+async def receivedTest():
+	print("test clear!")
 	
 
 # matching 요청을 받았을 때
@@ -115,19 +99,17 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 	set = Redis.MessageSet("matching" + userId)
 	if set.exist():
 		raise HTTPException(status_code=400, detail= "이미 요청 대기 중입니다.")
-	
-	lambda_url = os.environ["LAMBDA_URL"]
-	headers = {"Content-Type": "application/json"}
+
+	matchingReqDto["userId"] = userId
+	matchingReqDto["token"] = Header("ACCESS_AUTHORIZATION")
 	payload_json = json.dumps(matchingReqDto)
-	payload_json["userId"] = userId
 
-	response = Request.post(lambda_url, headers=headers, data=payload_json)
+	response_data = send_messages(payload_json)
 
-	if response.status_code == 200:
-		response_data = response.json()
-		return response_data
+	if response_data == None:
+		raise HTTPException(status_code=405, detail="SQS 작동 오류")
 	else:
-		return None
+		return {"status": 1, "message": "요청이 진행중입니다."}
 
 
 
@@ -143,18 +125,21 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	cafes = list(set.get_all())
 	set.delete()
 
-	collection = mongodb.client["cafe"]["matching"]
+	collection = mongodb.client["cafe"]["cafe"]
+	cafe = collection.find_one({"userId": cafeId})
 
+	collection = mongodb.client["cafe"]["matching"]
+	
 	# TODO status 필요함
 	matching = Documents.Matching(
 		userId = matchingReqDto.userId,
-   		cafeId = cafeId,
+   		cafe = cafe,
 		number = matchingReqDto.peopleNumber,
 		status = Documents.Status("PROCESSING")
 	)
 	result = collection.insert_one(matching.dict)
 
-	sendingAcceptMessageToUserFromCafe(matchingReqDto.userId, result.inserted_id,  cafeId)
+	sendingAcceptMessageToUserFromCafe(matchingReqDto.userId, result.inserted_id, cafeId)
 	
 	for cafeId in cafes:
 		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, matchingReqDto.userId)
@@ -176,7 +161,6 @@ async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, 
 
 
 # 유저의 매칭 취소 요청 - 매칭되기 이전
-# cafeFastPutSSEMessage(cafeId, userId, 'cancel')
 @app.delete("/api/matching/before")
 async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 	set = Redis.MessageSet("matching" + userId)
@@ -188,7 +172,6 @@ async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 
 
 # 유저의 매칭 취소 요청 - 매칭된 이후
-# cafeFastPutSSEMessage(matchingCancelReqDto.cafeId, userId, "cancel")
 @app.put("/api/matching/after")
 async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["cafe"]["matching"]
@@ -211,8 +194,7 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 
 
 @app.post("/api/matching/lambda")
-async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto):#, userId : str = Depends(verify_jwt_token)):
-	userId = "123"
+async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
 	if postMatchingMessageToCafe.running:
 		raise HTTPException(status_code=400, detail= "이미 매칭이 진행 중입니다.")
 	
@@ -241,7 +223,7 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto):
 		
 
 		for cafe in cafes:
-			cafeId = str(cafe["_id"])
+			cafeId = str(cafe["userId"])
 			new_set.add(cafeId)
 			try:
 				await sendingMatchingMessageToCafe(cafeId, userId, number)
