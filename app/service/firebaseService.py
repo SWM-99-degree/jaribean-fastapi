@@ -11,7 +11,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, "jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"))
 
 token_domain = "Token:"
-cred_path = "../jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"
+cred_path = "/code/jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"
 cred = credentials.Certificate(cred_path)
 firebase_admin.initialize_app(cred)
 

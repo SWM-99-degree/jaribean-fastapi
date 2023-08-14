@@ -11,12 +11,12 @@ from bson.son import SON
 import jwt
 
 
-from entity import Redis, Documents
-from entity import mongodb
-from reqdto import requestDto
-from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
-from service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
-from service.sqsService import send_messages
+from .entity import Redis, Documents
+from .entity import mongodb
+from .reqdto import requestDto
+from .service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
+from .service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
+from .service.sqsService import send_messages
 
 import threading
 import json
@@ -32,6 +32,8 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 app = FastAPI()
 
 from fastapi.middleware.cors import CORSMiddleware
+
+# TODO changed
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

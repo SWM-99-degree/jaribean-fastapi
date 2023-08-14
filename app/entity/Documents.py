@@ -13,16 +13,6 @@ class Status(str, Enum):
     COMPLETE : "COMPLETE"
     NOSHOW : "NOSHOW"
 
-class Matching(BaseModel):
-    id : str
-    userId : str
-    cafe: Cafe
-    number : int
-    matchingTime : datetime = Field(default_factory=datetime.now)
-    status : Status
-
-
-
 class User(BaseModel):
     id : str
     userName : str
@@ -45,3 +35,11 @@ class Cafe(BaseModel):
     createdAt : datetime
     modifiedAt : datetime
 
+
+class Matching(BaseModel):
+    id : str
+    userId : str
+    cafe: Cafe
+    number : int
+    matchingTime : datetime = Field(default_factory=datetime.now)
+    status : Status
