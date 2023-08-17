@@ -25,6 +25,7 @@ from bson.objectid import ObjectId
 import asyncio
 import datetime
 import time
+from typing import Optional
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -41,9 +42,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-async def verify_jwt_token(token:str = Header("ACCESS_AUTHORIZATION")):
+async def verify_jwt_token(token: Optional[str] = Header("ACCESS_AUTHORIZATION")):
     try:
-        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS256"])
+        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS512"])
         return payload["userId"]
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="토큰이 만료되었습니다.")
