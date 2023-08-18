@@ -231,8 +231,8 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
 		
 		new_set = Redis.MessageSet("matching" + userId)
 		
-
 		for cafe in cafes:
+			print(str(cafe["_id"]))
 			cafeId = str(cafe["userId"])
 			new_set.add(cafeId)
 			try:
