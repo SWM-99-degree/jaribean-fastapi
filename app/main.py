@@ -218,7 +218,7 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
         		"$near": {
             		"$geometry": {
                 		"type" : "Point",
-                		"coordinates" :[matchingReqDto.latitude, matchingReqDto.longitude] #[126.661675911488, 37.450979037492] 
+                		"coordinates" :[matchingReqDto.longitude, matchingReqDto.latitude] #[126.661675911488, 37.450979037492] 
             		},
             		"$maxDistance": 700
         		}
