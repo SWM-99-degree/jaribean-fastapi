@@ -47,9 +47,9 @@ async def verify_jwt_token(ACCESS_AUTHORIZATION: Optional[str] = Header(None, co
         payload = jwt.decode(ACCESS_AUTHORIZATION, os.getenv("SECRET_KEY"), algorithms=["HS512"])
         return payload["userId"]
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=400, code = -1, msg= "토큰이 만료되었습니다.", data = {"code" : -1, 'msg' : "토큰이 만료되었습니다."})
+        raise HTTPException(status_code=401, content = {"code" : -1,"msg" : "토큰이 만료되었습니다.","data" : {"code" : -1, 'msg' : "토큰이 만료되었습니다."}})
     except jwt.InvalidTokenError:
-	    raise HTTPException(status_code=400, code = -1, msg= "토큰이 알맞지 않습니다.", data = {'code' : -1, 'msg':"토큰이 알맞지 않습니다."})
+	    raise HTTPException(status_code=401, content = {"code" : -1,"msg" : "토큰이 유효하지 않습니다..","data" : {"code" : -1, 'msg' : "토큰이 유효하지 않습니다."}})
 
 def expireCallBack(message):
 	userId = message["data"].decode("utf-8")[8:]
@@ -101,7 +101,15 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 	
 	set = Redis.MessageSet("matching" + userId)
 	if set.exist():
-		raise HTTPException(status_code=400, code = -1, msg= "이미 매칭이 되었습니다", data = {'code' : -1, 'msg':"이미 매칭되었습니다."})
+		data = {
+			"code": -1,
+			"msg": "이미 매칭이 되었습니다",
+			"data": {
+				"code": -1,
+				"msg": "이미 매칭이 되었습니다"
+			}
+		}
+		raise HTTPException(status_code=400, content = data)
 	
 	data = {
 		'peopleNumber' : matchingReqDto.peopleNumber,
@@ -117,7 +125,15 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 	response_data = send_messages(payload_json)
 
 	if response_data == None:
-		raise HTTPException(status_code=405, code= -1, msg ="SQS 작동 오류", data = {"code" : -1, "msg": "SQS 작동 오류."})
+		data = {
+			"code": -1,
+			"msg": 'SQS 오류.',
+			"data": {
+				"code": -1,
+				"msg": 'SQS 오류.'
+			}
+		}
+		raise HTTPException(status_code=405, content = data)
 	else:
 		return {"code" : 1, "msg": "요청이 진행중입니다.", "data" : {"code" : 1, "msg": "요청이 진행중입니다."}}
 
@@ -131,7 +147,15 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	
 	set = Redis.MessageSet("matching" + matchingReqDto.userId)
 	if (set.exist() == None):
-		raise HTTPException(status_code=400, code = -1, msg = '이미 매칭되었습니다.', data = {'code' : -1, 'msg':"이미 매칭되었습니다."})
+		response_data = {
+			"code": -1,
+			"msg": '이미 매칭되었습니다.',
+			"data": {
+				"code": -1,
+				"msg": '이미 매칭되었습니다.'
+			}
+		}
+		raise HTTPException(status_code=400, content = response_data)
 	
 	cafes = list(set.get_all())
 	set.delete()
@@ -207,8 +231,16 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 @app.post("/api/matching/lambda")
 async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
 	if postMatchingMessageToCafe.running:
-		raise HTTPException(status_code=400, code = -1, msg= "매칭에 대한 처리가 이미 진행중입니다.", data = {'code' : -1, 'msg':"매칭에 대한 처리가 이미 진행중입니다."})
-	
+		response_data = {
+			"code": -1,
+			"msg": "매칭에 대한 처리가 이미 진행중입니다.",
+			"data": {
+				"code": -1,
+				"msg": "매칭에 대한 처리가 이미 진행중입니다."
+			}
+		}
+		raise HTTPException(status_code=400, content = response_data)
+		
 	postMatchingMessageToCafe.running = True
 	number = matchingReqDto.peopleNumber
 
@@ -255,8 +287,15 @@ def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depe
 	collection = mongodb.client["jariBean"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
 	if result['status'] != "PROCESSING":
-		raise HTTPException(status_code=400, code = -1, msg= "매칭에 대한 처리가 이미 진행되었습니다.", data = {'code' : -1, 'msg':"매칭에 대한 처리가 이미 진행되었습니다."})
-	
+		response_data = {
+			"code": -1,
+			"msg": "매칭에 대한 처리가 이미 진행되었습니다.",
+			"data": {
+				"code": -1,
+				"msg": "매칭에 대한 처리가 이미 진행되었습니다."
+			}
+		}
+		raise HTTPException(status_code=400, content = response_data)
 	new_data = {
     	"$set": {
         	"status": "NOSHOW",
@@ -274,7 +313,15 @@ def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = De
 	collection = mongodb.client["jariBean"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
 	if result['status'] != "PROCESSING":
-		raise HTTPException(status_code=400, code = -1, msg= "매칭에 대한 처리가 이미 진행되었습니다.", data = {'code' : -1, 'msg':"매칭에 대한 처리가 이미 진행되었습니다."})
+		response_data = {
+			"code": -1,
+			"msg": "매칭에 대한 처리가 이미 진행되었습니다.",
+			"data": {
+				"code": -1,
+				"msg": "매칭에 대한 처리가 이미 진행되었습니다."
+			}
+		}
+		raise HTTPException(status_code=400, content = response_data)
 	
 	new_data = {
     	"$set": {
