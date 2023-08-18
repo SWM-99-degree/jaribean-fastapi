@@ -32,7 +32,6 @@ class RedisDB:
         self.redis = None
     def connect(self):
         self.redis = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
-        self.redis.config_set('notify-keyspace-events', 'Ex')
     def close(self):
         self.redis.close()
 
