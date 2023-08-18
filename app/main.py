@@ -47,9 +47,9 @@ async def verify_jwt_token(ACCESS_AUTHORIZATION: Optional[str] = Header(None, co
         payload = jwt.decode(ACCESS_AUTHORIZATION, os.getenv("SECRET_KEY"), algorithms=["HS512"])
         return payload["userId"]
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="토큰이 만료되었습니다.")
+        raise HTTPException(status_code=400, code = -1, msg= "토큰이 만료되었습니다.", data = {"code" : -1, 'msg' : "토큰이 만료되었습니다."})
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="토큰이 알맞지 않습니다.")
+	    raise HTTPException(status_code=400, code = -1, msg= "토큰이 알맞지 않습니다.", data = {'code' : -1, 'msg':"토큰이 알맞지 않습니다."})
 
 def expireCallBack(message):
 	userId = message["data"].decode("utf-8")[8:]
@@ -101,7 +101,7 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 	
 	set = Redis.MessageSet("matching" + userId)
 	if set.exist():
-		raise HTTPException(status_code=400, detail= "이미 요청 대기 중입니다.")
+		raise HTTPException(status_code=400, code = -1, msg= "이미 매칭이 되었습니다", data = {'code' : -1, 'msg':"이미 매칭되었습니다."})
 	
 	data = {
 		'peopleNumber' : matchingReqDto.peopleNumber,
@@ -117,9 +117,10 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 	response_data = send_messages(payload_json)
 
 	if response_data == None:
-		raise HTTPException(status_code=405, detail="SQS 작동 오류")
+		raise HTTPException(status_code=405, code= -1, msg ="SQS 작동 오류", data = {"code" : -1, "msg": "SQS 작동 오류."})
 	else:
-		return {"status": 1, "message": "요청이 진행중입니다."}
+		return {"code" : 1, "msg": "요청이 진행중입니다.", "data" : {"code" : 1, "msg": "요청이 진행중입니다."}}
+
 
 
 
@@ -130,7 +131,7 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	
 	set = Redis.MessageSet("matching" + matchingReqDto.userId)
 	if (set.exist() == None):
-		raise HTTPException(status_code=400, detail="이미 매칭이 되었습니다.")
+		raise HTTPException(status_code=400, code = -1, msg = '이미 매칭되었습니다.', data = {'code' : -1, 'msg':"이미 매칭되었습니다."})
 	
 	cafes = list(set.get_all())
 	set.delete()
@@ -153,7 +154,7 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	
 	for cafeId in cafes:
 		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, matchingReqDto.userId)
-	return {"status": 1, "message": "요청에 성공했습니다!"}
+	return {"code" : 1, "msg": "요청에 성공했습니다!", "data" : {"code" : 1 , "msg": "요청에 성공했습니다!"}}
 
 
 
@@ -167,7 +168,7 @@ async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, 
 	if set.delete_if_empty():
 		sendingCancelMessageToUser(matchingReqDto.userId)
 		
-	return {"status": 1, "message": "매칭 거절에 성공했습니다!"}
+	return {"code" : 1, "msg": "매칭 거절에 성공했습니다!", "data" : {"code" : 1 , "msg": "매칭 거절에 성공했습니다!"}}
 
 
 # 유저의 매칭 취소 요청 - 매칭되기 이전
@@ -178,7 +179,7 @@ async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 	for cafeId in cafes:
 		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, userId)
 	set.delete()
-	return {"status": 1, "message": "매칭 거절에 성공했습니다!"}
+	return {"code" : 1, "msg": "매칭 거절에 성공했습니다!", "data" : {"code" : 1, "msg": "매칭 거절에 성공했습니다!" }}
 
 
 # 유저의 매칭 취소 요청 - 매칭된 이후
@@ -198,15 +199,15 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 
 	if current_time - matching["matchingTime"] > 90:
 		# 추가적으로 결제가 되도록 하는 코드 필요
-		return {"status": 1, "message": "매칭 거절에 성공했습니다! 보증금이 환급되지 않습니다."}
+		return {"code" : 1, "msg": "매칭 거절에 성공했습니다! 보증금이 환급되지 않습니다.", "data" : {"code" : 1 , "msg": "매칭 거절에 성공했습니다! 보증금이 환급되지 않습니다."}}
 	else:
-		return {"status": 1, "message": "매칭 거절에 성공했습니다! 보증금이 환급됩니다."}
+		return {"code" : 1, "msg": "매칭 거절에 성공했습니다! 보증금이 환급됩니다.", "data" : {"code" : 1 , "msg": "매칭 거절에 성공했습니다! 보증금이 환급됩니다."}}
 
 
 @app.post("/api/matching/lambda")
 async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
 	if postMatchingMessageToCafe.running:
-		raise HTTPException(status_code=400, detail= "이미 매칭이 진행 중입니다.")
+		raise HTTPException(status_code=400, code = -1, msg= "매칭에 대한 처리가 이미 진행중입니다.", data = {'code' : -1, 'msg':"매칭에 대한 처리가 이미 진행중입니다."})
 	
 	postMatchingMessageToCafe.running = True
 	number = matchingReqDto.peopleNumber
@@ -241,7 +242,7 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
 				print("토큰이 없습니다.")
 			#cafePutSSEMessage(cafeId, userId, number)
 		new_set.expire()
-		return {"status": 1, "message": "매칭 요청에 성공했습니다!"}
+		return {"code" : 1, "msg": "매칭 요청에 서버에 들어갔습니다!", "data" : {"code" : 1 , "msg": "매칭 요청에 서버에 들어갔습니다!"}}
 	finally:
 		postMatchingMessageToCafe.running = False
 
@@ -254,7 +255,7 @@ def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depe
 	collection = mongodb.client["jariBean"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
 	if result['status'] != "PROCESSING":
-		raise HTTPException(status_code=400, detail= "매칭에 대한 처리가 이미 진행되었습니다.")
+		raise HTTPException(status_code=400, code = -1, msg= "매칭에 대한 처리가 이미 진행되었습니다.", data = {'code' : -1, 'msg':"매칭에 대한 처리가 이미 진행되었습니다."})
 	
 	new_data = {
     	"$set": {
@@ -262,7 +263,7 @@ def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depe
     	}
 	}
 	collection.update_one({"_id": ObjectId(matchingReq.matchingId)}, new_data)
-	return {"status": 1, "message": "노쇼 설정이 되었습니다!"}
+	return {"code" : 1, "msg": "노쇼 설정이 되었습니다!", "data" : {"code" : 1, "msg": "노쇼 설정이 되었습니다!"}}
 
 
 
@@ -271,6 +272,10 @@ def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depe
 @app.put("/api/matching/complete")
 def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["jariBean"]["matching"]
+	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
+	if result['status'] != "PROCESSING":
+		raise HTTPException(status_code=400, code = -1, msg= "매칭에 대한 처리가 이미 진행되었습니다.", data = {'code' : -1, 'msg':"매칭에 대한 처리가 이미 진행되었습니다."})
+	
 	new_data = {
     	"$set": {
         	"status": "COMPLETE",
@@ -278,4 +283,4 @@ def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = De
 	}
 	collection.update_one({"_id": ObjectId(matchingReq.matchingId)}, new_data)
 	sendingCompleteMessageToCafe(userId, matchingReq.matchingId, matchingReq.cafeId)
-	return {"status": 1, "message": "매칭이 성사되어 종료되었습니다!"}
+	return {"code" : 1, "msg": "매칭이 성사되어 종료되었습니다!", "data" : {"code" : 1, "msg": "매칭이 성사되어 종료되었습니다!"}}
