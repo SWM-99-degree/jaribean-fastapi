@@ -102,13 +102,13 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 		raise HTTPException(status_code=400, detail= "이미 요청 대기 중입니다.")
 	
 	data = {
-		'peopleNumber' : matchingReqDto['peopleNumber'],
-		'latitude' : matchingReqDto['latitude'],
-		'longitude' : matchingReqDto['longitude'],
+		'peopleNumber' : matchingReqDto.peopleNumber,
+		'latitude' : matchingReqDto.latitude,
+		'longitude' : matchingReqDto.longitude,
 		'userId' : userId,
 		'token' : ACCESS_AUTHORIZATION
-
 	}
+	print(ACCESS_AUTHORIZATION)
 
 	payload_json = json.dumps(data)
 
