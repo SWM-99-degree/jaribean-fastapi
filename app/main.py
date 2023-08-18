@@ -42,9 +42,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-async def verify_jwt_token(token: Optional[str] = Header("ACCESS_AUTHORIZATION")):
+async def verify_jwt_token(ACCESS_AUTHORIZATION: Optional[str] = Header(None, convert_underscores = False)):
     try:
-        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS512"])
+        payload = jwt.decode(ACCESS_AUTHORIZATION, os.getenv("SECRET_KEY"), algorithms=["HS512"])
         return payload["userId"]
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="토큰이 만료되었습니다.")
@@ -95,15 +95,22 @@ async def receivedTest():
 
 # matching 요청을 받았을 때
 @app.post("/api/matching")
-async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
+async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token), ACCESS_AUTHORIZATION: Optional[str] = Header(None, convert_underscores = False)):
 	
 	set = Redis.MessageSet("matching" + userId)
 	if set.exist():
 		raise HTTPException(status_code=400, detail= "이미 요청 대기 중입니다.")
+	
+	data = {
+		'peopleNumber' : matchingReqDto['peopleNumber'],
+		'latitude' : matchingReqDto['latitude'],
+		'longitude' : matchingReqDto['longitude'],
+		'userId' : userId,
+		'token' : ACCESS_AUTHORIZATION
 
-	matchingReqDto["userId"] = userId
-	matchingReqDto["token"] = Header("ACCESS_AUTHORIZATION")
-	payload_json = json.dumps(matchingReqDto)
+	}
+
+	payload_json = json.dumps(data)
 
 	response_data = send_messages(payload_json)
 
