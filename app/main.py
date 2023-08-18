@@ -12,7 +12,7 @@ import jwt
 
 
 from .entity import Redis, Documents
-from .entity import mongodb
+from .entity import mongodb, redisdb
 from .reqdto import requestDto
 from .service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
 from .service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
@@ -72,11 +72,13 @@ def start_listening():
 @app.on_event("startup")
 def on_app_start():
 	mongodb.connect()
+	redisdb.connect()
 	threading.Thread(target=start_listening, daemon=True).start()
 
 @app.on_event("shutdown")
 async def on_app_shutdown():
 	mongodb.close()
+	redisdb.close()
 
 	
 
