@@ -135,10 +135,10 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	cafes = list(set.get_all())
 	set.delete()
 
-	collection = mongodb.client["cafe"]["cafe"]
+	collection = mongodb.client["jariBean"]["cafe"]
 	cafe = collection.find_one({"userId": cafeId})
 
-	collection = mongodb.client["cafe"]["matching"]
+	collection = mongodb.client["jariBean"]["matching"]
 	
 	# TODO status 필요함
 	matching = Documents.Matching(
@@ -184,7 +184,7 @@ async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 # 유저의 매칭 취소 요청 - 매칭된 이후
 @app.put("/api/matching/after")
 async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
-	collection = mongodb.client["cafe"]["matching"]
+	collection = mongodb.client["jariBean"]["matching"]
 	
 	new_data = {
     	"$set": {
@@ -212,7 +212,7 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
 	number = matchingReqDto.peopleNumber
 
 	try:
-		collection = mongodb.client["cafe"]["cafe"]
+		collection = mongodb.client["jariBean"]["cafe"]
 
 		collection.create_index([("coordinate", "2dsphere")])
 		query = {
@@ -236,7 +236,7 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
 			cafeId = str(cafe["userId"])
 			new_set.add(cafeId)
 			try:
-				await sendingMatchingMessageToCafe(cafeId, userId, number)
+				sendingMatchingMessageToCafe(cafeId, userId, number)
 			except:
 				print("토큰이 없습니다.")
 			#cafePutSSEMessage(cafeId, userId, number)
@@ -250,10 +250,10 @@ postMatchingMessageToCafe.running = False
 
 # TODO NOSHOW - COMPLETE 인지를 무조건 확인해야 함
 @app.put("/api/matching/noshow")
-async def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
-	collection = mongodb.client["cafe"]["matching"]
+def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
+	collection = mongodb.client["jariBean"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
-	if result.status != "PROCESSING":
+	if result['status'] != "PROCESSING":
 		raise HTTPException(status_code=400, detail= "매칭에 대한 처리가 이미 진행되었습니다.")
 	
 	new_data = {
@@ -269,8 +269,8 @@ async def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str 
 
 # TODO COMPLETE
 @app.put("/api/matching/complete")
-async def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
-	collection = mongodb.client["cafe"]["matching"]
+def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
+	collection = mongodb.client["jariBean"]["matching"]
 	new_data = {
     	"$set": {
         	"status": "COMPLETE",
