@@ -44,7 +44,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.exception_handler(MyCustomException)
 def customExceptionHandler(request: Request, exc: MyCustomException):
 	return HTTPException(status_code = exc.status_code, content = {
