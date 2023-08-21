@@ -19,6 +19,7 @@ from .service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, u
 from .service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
 from .service.sqsService import send_messages
 from .service.authorization import verify_jwt_token
+from .service.expireHandlerService import listenExpireEvents, expireCallBack
 
 import threading
 import json
@@ -56,19 +57,6 @@ def customExceptionHandler(request: Request, exc: MyCustomException):
 	})
 
 
-def expireCallBack(message):
-	userId = message["data"].decode("utf-8")[8:]
-	sendingCancelMessageToUser(userId)
-	
-
-async def listenExpireEvents():
-	redis = Redis.EventListenerRedis()
-	redisSubscriber = redis.redis.pubsub()
-	redisSubscriber.psubscribe(**{"__keyevent@0__:*": expireCallBack})
-	
-	for message in redisSubscriber.listen():
-		pass
-
 def start_listening():
     asyncio.run(listenExpireEvents())
     
@@ -84,19 +72,17 @@ async def on_app_shutdown():
 	mongodb.close()
 	redisdb.close()
 
-	
-
 # 초기 세팅
-@app.get("/api/test")
-async def getTest():
-	data = {"name" : "yoHO!",
-	 		"token" : 123123213}
-	msg = json.dumps(data)
-	send_messages(msg)
+# @app.get("/api/test")
+# async def getTest():
+# 	data = {"name" : "yoHO!",
+# 	 		"token" : 123123213}
+# 	msg = json.dumps(data)
+# 	send_messages(msg)
 
-@app.get("/api/test/test")
-async def receivedTest():
-	print("test clear!")
+# @app.get("/api/test/test")
+# async def receivedTest():
+# 	print("test clear!")
 	
 
 # matching 요청을 받았을 때
@@ -114,9 +100,7 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 		'userId' : userId,
 		'token' : ACCESS_AUTHORIZATION
 	}
-
 	payload_json = json.dumps(data)
-
 	response_data = send_messages(payload_json)
 
 	if response_data == None:
@@ -128,7 +112,6 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 
 
 # 카페의 매칭 응답 요청
-# SSE 버전 userPutSSEMessage(matchingReqDto.userId, (matchingReqDto.cafeId, result.inserted_id))
 @app.post("/api/matching/cafe")
 async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, cafeId : str = Depends(verify_jwt_token)):
 	
@@ -144,7 +127,6 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 
 	collection = mongodb.client["jariBean"]["matching"]
 	
-	# TODO status 필요함
 	matching = Documents.Matching(
 		userId = matchingReqDto.userId,
    		cafe = cafe,
@@ -163,7 +145,6 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 
 
 # 카페의 매칭 거절 요청
-# SSE 버전 userPutSSEMessage(matchingReqDto.userId, (matchingReqDto.userId,"cancel"))
 @app.delete("/api/matching/cafe")
 async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, cafeId : str = Depends(verify_jwt_token)):
 	set = Redis.MessageSet("matching" + matchingReqDto.userId)
@@ -237,13 +218,12 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
 		new_set = Redis.MessageSet("matching" + userId)
 		
 		for cafe in cafes:
-			print(str(cafe["_id"]))
 			cafeId = str(cafe["userId"])
 			new_set.add(cafeId)
 			try:
 				sendingMatchingMessageToCafe(cafeId, userId, number)
 			except:
-				print("토큰이 없습니다.")
+				print(cafeId + "의 토큰이 없습니다.")
 		new_set.expire()
 		return MyCustomResponse(1, "매칭이 진행중입니다. 잠시만 기다려주세요.")
 	finally:
