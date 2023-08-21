@@ -6,12 +6,12 @@ load_dotenv()
 
 class EventListenerRedis:
     def __init__(self):
-        self.redis = redis.StrictRedis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
+        self.redis = redis.StrictRedis(host=os.getenv("REDIS_ENDPOINT"), port=6379,charset="utf-8" ,db=0)
 
 class Redis:
     def __init__(self, name):
         self.name = name
-        self.redis = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
+        self.redis = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, charset="utf-8" ,db=0)
     def getToken(self):
         return self.redis.hget(self.name, "firebaseToken")
 
@@ -22,7 +22,7 @@ class MessageSet:
         self.redis = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
         
     def expire(self):
-        return self.redis.expire(self.name, 300)
+        return self.redis.expire(self.name, 5)
 
     def exist(self, *items): 
         if self.redis.exists(self.name):

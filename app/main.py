@@ -11,15 +11,15 @@ from bson.son import SON
 import jwt
 
 
-from .entity import Redis, Documents
-from .entity import mongodb, redisdb
-from .reqdto import requestDto
-from .reqdto.responseDto import MyCustomException, MyCustomResponse
-from .service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
-from .service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
-from .service.sqsService import send_messages
-from .service.authorization import verify_jwt_token
-from .service.expireHandlerService import listenExpireEvents, expireCallBack
+from entity import Redis, Documents
+from entity import mongodb, redisdb
+from reqdto import requestDto
+from reqdto.responseDto import MyCustomException, MyCustomResponse
+from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
+from service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
+from service.sqsService import send_messages
+from service.authorization import verify_jwt_token
+from service.expireHandlerService import listenExpireEvents, expireCallBack
 
 import threading
 import json
@@ -80,9 +80,9 @@ async def on_app_shutdown():
 # 	msg = json.dumps(data)
 # 	send_messages(msg)
 
-# @app.get("/api/test/test")
-# async def receivedTest():
-# 	print("test clear!")
+@app.get("/api/test/test")
+async def receivedTest():
+	testCode(token=453)
 	
 
 # matching 요청을 받았을 때
@@ -190,7 +190,8 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 
 
 @app.post("/api/matching/lambda")
-async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
+def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto):#, userId : str = Depends(verify_jwt_token)):
+	userId = "64dc884b72a967459a2643c2"
 	if postMatchingMessageToCafe.running:
 		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행중입니다.")
 		
@@ -215,10 +216,11 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
 
 		cafes = collection.find(query)
 		
-		new_set = Redis.MessageSet("matching" + userId)
+		new_set = Redis.MessageSet("matching:" + userId)
 		
 		for cafe in cafes:
-			cafeId = str(cafe["userId"])
+			# firebase 토큰을 어떻게 저장하고 있는가
+			cafeId = str(cafe["_id"])
 			new_set.add(cafeId)
 			try:
 				sendingMatchingMessageToCafe(cafeId, userId, number)
