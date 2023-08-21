@@ -14,9 +14,11 @@ import jwt
 from .entity import Redis, Documents
 from .entity import mongodb, redisdb
 from .reqdto import requestDto
+from .reqdto.responseDto import MyCustomException, MyCustomResponse
 from .service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
 from .service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
 from .service.sqsService import send_messages
+from .service.authorization import verify_jwt_token
 
 import threading
 import json
@@ -42,15 +44,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 예외처리
-class MyCustomException(Exception):
-    def __init__(self, status_code : int,code:int, msg:str):
-        self.status_code = status_code
-        self.code = code
-        self.msg = msg
-
-async def MyCustomResponse(code : int, msg : str):
-	return {"code" : code, "msg" : msg, "data" : {"code":code, "msg": msg}}
 
 @app.exception_handler(MyCustomException)
 def customExceptionHandler(request: Request, exc: MyCustomException):
@@ -63,15 +56,6 @@ def customExceptionHandler(request: Request, exc: MyCustomException):
 		}
 	})
 
-
-async def verify_jwt_token(ACCESS_AUTHORIZATION: Optional[str] = Header(None, convert_underscores = False)):
-    try:
-        payload = jwt.decode(ACCESS_AUTHORIZATION, os.getenv("SECRET_KEY"), algorithms=["HS512"])
-        return payload["userId"]
-    except jwt.ExpiredSignatureError:
-        raise MyCustomException(401, -1, "토큰이 만료되었습니다.")
-    except jwt.InvalidTokenError:
-	    raise MyCustomException(401, -1, "토큰이 유효하지 않습니다.")
 
 def expireCallBack(message):
 	userId = message["data"].decode("utf-8")[8:]
@@ -304,5 +288,5 @@ def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = De
 	collection.update_one({"_id": ObjectId(matchingReq.matchingId)}, new_data)
 
 	sendingCompleteMessageToCafe(userId, matchingReq.matchingId, matchingReq.cafeId)
-	
+
 	return MyCustomResponse(1, "매칭이 완료되었습니다.")
