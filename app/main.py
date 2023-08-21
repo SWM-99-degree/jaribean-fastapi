@@ -26,15 +26,15 @@ import asyncio
 import datetime
 import time
 from typing import Optional
+from fastapi.middleware.cors import CORSMiddleware
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = FastAPI()
 
-from fastapi.middleware.cors import CORSMiddleware
-
-# TODO changed
+# CORS 설정
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -42,20 +42,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 예외처리
+class MyCustomException(Exception):
+    def __init__(self, status_code : int,code:int, msg:str):
+        self.status_code = status_code
+        self.code = code
+        self.msg = msg
+
+async def MyCustomResponse(code : int, msg : str):
+	return {"code" : code, "msg" : msg, "data" : {"code":code, "msg": msg}}
+
+@app.exception_handler(MyCustomException)
+def customExceptionHandler(request: Request, exc: MyCustomException):
+	return HTTPException(status_code = exc.status_code, content = {
+		"code" : exc.code,
+		"msg" : exc.msg,
+		"data" : {
+			"code" : exc.code,
+			"msg" : exc.msg
+		}
+	})
+
+
 async def verify_jwt_token(ACCESS_AUTHORIZATION: Optional[str] = Header(None, convert_underscores = False)):
     try:
         payload = jwt.decode(ACCESS_AUTHORIZATION, os.getenv("SECRET_KEY"), algorithms=["HS512"])
         return payload["userId"]
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, content = {"code" : -1,"msg" : "토큰이 만료되었습니다.","data" : {"code" : -1, 'msg' : "토큰이 만료되었습니다."}})
+        raise MyCustomException(401, -1, "토큰이 만료되었습니다.")
     except jwt.InvalidTokenError:
-	    raise HTTPException(status_code=401, content = {"code" : -1,"msg" : "토큰이 유효하지 않습니다..","data" : {"code" : -1, 'msg' : "토큰이 유효하지 않습니다."}})
+	    raise MyCustomException(401, -1, "토큰이 유효하지 않습니다.")
 
 def expireCallBack(message):
 	userId = message["data"].decode("utf-8")[8:]
 	sendingCancelMessageToUser(userId)
 	
-
 
 async def listenExpireEvents():
 	redis = Redis.EventListenerRedis()
@@ -101,15 +122,7 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 	
 	set = Redis.MessageSet("matching" + userId)
 	if set.exist():
-		data = {
-			"code": -1,
-			"msg": "이미 매칭이 되었습니다",
-			"data": {
-				"code": -1,
-				"msg": "이미 매칭이 되었습니다"
-			}
-		}
-		raise HTTPException(status_code=400, content = data)
+		raise MyCustomException(400, -1, "이미 매칭이 진행중입니다.")
 	
 	data = {
 		'peopleNumber' : matchingReqDto.peopleNumber,
@@ -118,24 +131,15 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 		'userId' : userId,
 		'token' : ACCESS_AUTHORIZATION
 	}
-	print(ACCESS_AUTHORIZATION)
 
 	payload_json = json.dumps(data)
 
 	response_data = send_messages(payload_json)
 
 	if response_data == None:
-		data = {
-			"code": -1,
-			"msg": 'SQS 오류.',
-			"data": {
-				"code": -1,
-				"msg": 'SQS 오류.'
-			}
-		}
-		raise HTTPException(status_code=405, content = data)
+		raise MyCustomException(405, -1, "SQS가 가동중이지 않습니다.")
 	else:
-		return {"code" : 1, "msg": "요청이 진행중입니다.", "data" : {"code" : 1, "msg": "요청이 진행중입니다."}}
+		return MyCustomResponse(1, "매칭을 진행합니다.")
 
 
 
@@ -147,15 +151,7 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	
 	set = Redis.MessageSet("matching" + matchingReqDto.userId)
 	if (set.exist() == None):
-		response_data = {
-			"code": -1,
-			"msg": '이미 매칭되었습니다.',
-			"data": {
-				"code": -1,
-				"msg": '이미 매칭되었습니다.'
-			}
-		}
-		raise HTTPException(status_code=400, content = response_data)
+		raise MyCustomException(400, -1, "이미 매칭이 진행중입니다.")
 	
 	cafes = list(set.get_all())
 	set.delete()
@@ -178,7 +174,8 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	
 	for cafeId in cafes:
 		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, matchingReqDto.userId)
-	return {"code" : 1, "msg": "요청에 성공했습니다!", "data" : {"code" : 1 , "msg": "요청에 성공했습니다!"}}
+
+	return MyCustomResponse(1, "요청에 성공했습니다.")
 
 
 
@@ -192,7 +189,7 @@ async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, 
 	if set.delete_if_empty():
 		sendingCancelMessageToUser(matchingReqDto.userId)
 		
-	return {"code" : 1, "msg": "매칭 거절에 성공했습니다!", "data" : {"code" : 1 , "msg": "매칭 거절에 성공했습니다!"}}
+	return MyCustomResponse(1, "매칭을 거절하였습니다.")
 
 
 # 유저의 매칭 취소 요청 - 매칭되기 이전
@@ -203,7 +200,7 @@ async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 	for cafeId in cafes:
 		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, userId)
 	set.delete()
-	return {"code" : 1, "msg": "매칭 거절에 성공했습니다!", "data" : {"code" : 1, "msg": "매칭 거절에 성공했습니다!" }}
+	return MyCustomResponse(1, "매칭을 취소가 성공하였습니다.")
 
 
 # 유저의 매칭 취소 요청 - 매칭된 이후
@@ -223,23 +220,15 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 
 	if current_time - matching["matchingTime"] > 90:
 		# 추가적으로 결제가 되도록 하는 코드 필요
-		return {"code" : 1, "msg": "매칭 거절에 성공했습니다! 보증금이 환급되지 않습니다.", "data" : {"code" : 1 , "msg": "매칭 거절에 성공했습니다! 보증금이 환급되지 않습니다."}}
+		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급되지 않습니다.")
 	else:
-		return {"code" : 1, "msg": "매칭 거절에 성공했습니다! 보증금이 환급됩니다.", "data" : {"code" : 1 , "msg": "매칭 거절에 성공했습니다! 보증금이 환급됩니다."}}
+		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급됩니다.")
 
 
 @app.post("/api/matching/lambda")
 async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
 	if postMatchingMessageToCafe.running:
-		response_data = {
-			"code": -1,
-			"msg": "매칭에 대한 처리가 이미 진행중입니다.",
-			"data": {
-				"code": -1,
-				"msg": "매칭에 대한 처리가 이미 진행중입니다."
-			}
-		}
-		raise HTTPException(status_code=400, content = response_data)
+		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행중입니다.")
 		
 	postMatchingMessageToCafe.running = True
 	number = matchingReqDto.peopleNumber
@@ -272,62 +261,48 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
 				sendingMatchingMessageToCafe(cafeId, userId, number)
 			except:
 				print("토큰이 없습니다.")
-			#cafePutSSEMessage(cafeId, userId, number)
 		new_set.expire()
-		return {"code" : 1, "msg": "매칭 요청에 서버에 들어갔습니다!", "data" : {"code" : 1 , "msg": "매칭 요청에 서버에 들어갔습니다!"}}
+		return MyCustomResponse(1, "매칭이 진행중입니다. 잠시만 기다려주세요.")
 	finally:
 		postMatchingMessageToCafe.running = False
 
 postMatchingMessageToCafe.running = False
 
 
-# TODO NOSHOW - COMPLETE 인지를 무조건 확인해야 함
+
 @app.put("/api/matching/noshow")
 def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["jariBean"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
 	if result['status'] != "PROCESSING":
-		response_data = {
-			"code": -1,
-			"msg": "매칭에 대한 처리가 이미 진행되었습니다.",
-			"data": {
-				"code": -1,
-				"msg": "매칭에 대한 처리가 이미 진행되었습니다."
-			}
-		}
-		raise HTTPException(status_code=400, content = response_data)
+		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행되었습니다.")
+	
 	new_data = {
     	"$set": {
         	"status": "NOSHOW",
     	}
 	}
+
 	collection.update_one({"_id": ObjectId(matchingReq.matchingId)}, new_data)
-	return {"code" : 1, "msg": "노쇼 설정이 되었습니다!", "data" : {"code" : 1, "msg": "노쇼 설정이 되었습니다!"}}
+	return MyCustomResponse(1, "매칭 요청의 상태가 No-SHOW 로 변경되었습니다.")
 
 
 
-
-# TODO COMPLETE
 @app.put("/api/matching/complete")
 def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["jariBean"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
 	if result['status'] != "PROCESSING":
-		response_data = {
-			"code": -1,
-			"msg": "매칭에 대한 처리가 이미 진행되었습니다.",
-			"data": {
-				"code": -1,
-				"msg": "매칭에 대한 처리가 이미 진행되었습니다."
-			}
-		}
-		raise HTTPException(status_code=400, content = response_data)
+		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행되었습니다.")
 	
 	new_data = {
     	"$set": {
         	"status": "COMPLETE",
     	}
 	}
+
 	collection.update_one({"_id": ObjectId(matchingReq.matchingId)}, new_data)
+
 	sendingCompleteMessageToCafe(userId, matchingReq.matchingId, matchingReq.cafeId)
-	return {"code" : 1, "msg": "매칭이 성사되어 종료되었습니다!", "data" : {"code" : 1, "msg": "매칭이 성사되어 종료되었습니다!"}}
+	
+	return MyCustomResponse(1, "매칭이 완료되었습니다.")
