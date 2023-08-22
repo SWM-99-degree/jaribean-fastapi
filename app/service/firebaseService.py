@@ -15,14 +15,19 @@ cred_path = "/code/jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"
 cred = credentials.Certificate(cred_path)
 firebase_admin.initialize_app(cred)
 
+def expireCallBack(message):
+	userId = str(message["data"].decode("utf-8")[9:])
+	sendingCancelMessageToUser(userId)
+	
 
-# def testCode(token):
-#     # sendFCM1 = messaging.Message(notification= {"answer": "졸리다"}, token = token)
-#     cafeId = "64ddcf66e4c2060126013db1"
-#     print(Redis.Redis(token_domain+cafeId).getToken().decode('utf-8'))
-#     userToken = Redis.Redis(token_domain+cafeId).getToken().decode('utf-8')
-#     sendFCM = messaging.Message(data = {"title":"안녕", "description":"안녕ㅇㅇㅇㅇㅇ"}, token = userToken)
-#     response = messaging.send(sendFCM)
+async def listenExpireEvents():
+	redis = Redis.EventListenerRedis()
+	redisSubscriber = redis.redis.pubsub()
+	redisSubscriber.psubscribe(**{"__keyevent@0__:*": expireCallBack})
+	
+	for message in redisSubscriber.listen():
+		pass
+
 
 def sendingCompleteMessageToCafe(userId, matchingId, cafeId):
     global token_domain
