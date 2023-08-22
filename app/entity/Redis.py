@@ -6,14 +6,14 @@ load_dotenv()
 
 class EventListenerRedis:
     def __init__(self):
-        self.redis = redis.StrictRedis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
+        self.redis = redis.StrictRedis(host=os.getenv("REDIS_ENDPOINT"), port=6379,charset="utf-8" ,db=0)
 
 class Redis:
     def __init__(self, name):
         self.name = name
-        self.redis = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, db=0)
+        self.redis = redis.Redis(host=os.getenv("REDIS_ENDPOINT"), port=6379, charset="utf-8" ,db=0)
     def getToken(self):
-        return self.redis.hget(self.name, "firebaseToken")
+        return self.redis.hget(self.name, "firebaseToken").decode('utf-8')
 
 
 class MessageSet:
@@ -24,13 +24,13 @@ class MessageSet:
     def expire(self):
         return self.redis.expire(self.name, 300)
 
-    def exist(self, *items): 
+    def exist(self): 
         if self.redis.exists(self.name):
             # 데이터가 존재할 때의 처리
-            return self.redis.get(self.name)
+            return True
             # 데이터를 사용하거나 처리하는 로직 추가
         else:
-            return None
+            return False
 
     def pop(self):
         return self.redis.spop(self.name)
@@ -51,8 +51,10 @@ class MessageSet:
         return self.redis.scard(self.name)
     
     def delete_if_empty(self):
-        if self.size() == 0:
+        if self.redis.scard(self.name) == 0:
             self.redis.delete(self.name)
+            return True
+        return False
     
     def delete(self):
         self.redis.delete(self.name)

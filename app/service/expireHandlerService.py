@@ -1,9 +1,10 @@
-from ..entity import Redis
-from ..service.firebaseService import sendingCancelMessageToUser
+from entity import Redis
+from service.firebaseService import sendingCancelMessageToUser
 
 
 def expireCallBack(message):
-	userId = message["data"].decode("utf-8")[8:]
+	print(message["data"].decode("utf-8")[9:])
+	userId = str(message["data"].decode("utf-8")[9:])
 	sendingCancelMessageToUser(userId)
 	
 

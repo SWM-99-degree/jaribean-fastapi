@@ -16,22 +16,23 @@ cred = credentials.Certificate(cred_path)
 firebase_admin.initialize_app(cred)
 
 
-def testCode(token):
-    # sendFCM1 = messaging.Message(notification= {"answer": "졸리다"}, token = token)
-    sendFCM = messaging.Message(data = {"title":"안녕", "description":"안녕ㅇㅇㅇㅇㅇ"}, token = token)
-    response = messaging.send(sendFCM)
+# def testCode(token):
+#     # sendFCM1 = messaging.Message(notification= {"answer": "졸리다"}, token = token)
+#     cafeId = "64ddcf66e4c2060126013db1"
+#     print(Redis.Redis(token_domain+cafeId).getToken().decode('utf-8'))
+#     userToken = Redis.Redis(token_domain+cafeId).getToken().decode('utf-8')
+#     sendFCM = messaging.Message(data = {"title":"안녕", "description":"안녕ㅇㅇㅇㅇㅇ"}, token = userToken)
+#     response = messaging.send(sendFCM)
 
 def sendingCompleteMessageToCafe(userId, matchingId, cafeId):
     global token_domain
-    userToken = Redis.Redis(token_domain+cafeId).getToken()
+    userToken = Redis.Redis(token_domain+str(cafeId)).getToken()
     sendFCM = messaging.Message(
         data = {
-            "data" : {
             "userId" : userId,
             "cafeId" : cafeId,
             "matchingId" : matchingId,
-            "direction" : "complete"
-            },
+            "direction" : "complete",
             "type" : "data"
         },
         token = userToken
@@ -42,19 +43,17 @@ def sendingCompleteMessageToCafe(userId, matchingId, cafeId):
 
 def sendingAcceptMessageToUserFromCafe(userId, matchingId, cafeId):
     global token_domain
-    userToken = Redis.Redis(token_domain+userId).getToken()
+    userToken = Redis.Redis(token_domain+str(userId)).getToken()
 
     sendFCM = messaging.Message(
         data = { 
-            "data" : {
             "title" : "매칭 성공 완료!",
-            "description" : cafeId + "와 매칭이 시작되었습니다!",
-            "userId" : userId,
-            "cafeId" : cafeId,
-            "matchingId" : matchingId,
-            "direction" : "matching"
-            },
-            "type" : "noti"
+            "description" : str(cafeId) + "와 매칭이 시작되었습니다!",
+            "userId" : str(userId),
+            "cafeId" : str(cafeId),
+            "matchingId" : str(matchingId),
+            "direction" : "matching",
+            "type" : "data"
         },
         token = userToken
     )
@@ -63,14 +62,12 @@ def sendingAcceptMessageToUserFromCafe(userId, matchingId, cafeId):
 
 def sendingCancelMessageToUser(userId):
     global token_domain
-    userToken = Redis.Redis(token_domain+userId).getToken()
+    userToken = Redis.Redis(token_domain+str(userId)).getToken()
     sendFCM = messaging.Message(
         data = {
-            "data" : {
-            "userId" : userId,
-            "direction" : "cancel"
-            },
-            "type" : "data"
+            'userId' : str(userId),
+            'direction' : 'cancel',
+            'type' : 'data'
         },
         token = userToken)
 
@@ -78,13 +75,12 @@ def sendingCancelMessageToUser(userId):
 
 def sendingCancelMessageToCafeFromUserAfterMatching(cafeId, matchingId):
     global token_domain
-    userToken = Redis.Redis(token_domain+cafeId).getToken()
+    userToken = Redis.Redis(str(token_domain+str(cafeId))).getToken()
 
     sendFCM = messaging.Message(
         data = {
-            "data" : {
-            "userId" : matchingId,
-            "direction" : "cancel"},
+            "userId" : str(matchingId),
+            "direction" : "cancel",
             "type" : "data"
         },
         token = userToken
@@ -94,13 +90,12 @@ def sendingCancelMessageToCafeFromUserAfterMatching(cafeId, matchingId):
 
 def sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, userId):
     global token_domain
-    userToken = Redis.Redis(token_domain+cafeId).getToken()
+    userToken = Redis.Redis(token_domain+str(cafeId)).getToken()
 
     sendFCM = messaging.Message(
         data = {
-            "data" : {
-            "userId" : userId,
-            "direction" : "cancel"},
+            "userId" : str(userId),
+            "direction" : "cancel",
             "type" : "data"
         },
         token = userToken
@@ -110,13 +105,11 @@ def sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, userId):
 
 def sendingMatchingMessageToCafe(cafeId, userId, peopleNumber):
     global token_domain
-    userToken = Redis.Redis(token_domain+cafeId).getToken()
-
+    userToken = Redis.Redis(str(token_domain+cafeId)).getToken()
     sendFCM = messaging.Message(
         data = {
-            "data" : {
-                "userId" : userId,
-                "peopleNumber" : peopleNumber},
+            "userId" : str(userId),
+            "peopleNumber" : str(peopleNumber),
             "type" : "data"
         },
         token = userToken

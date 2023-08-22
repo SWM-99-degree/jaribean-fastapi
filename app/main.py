@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Header, Depends, HTTPException
 from fastapi.requests import Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from botocore.exceptions import ClientError
 from sse_starlette import sse
@@ -47,7 +47,7 @@ app.add_middleware(
 
 @app.exception_handler(MyCustomException)
 def customExceptionHandler(request: Request, exc: MyCustomException):
-	return HTTPException(status_code = exc.status_code, content = {
+	return JSONResponse(status_code = exc.status_code, content = {
 		"code" : exc.code,
 		"msg" : exc.msg,
 		"data" : {
@@ -72,24 +72,12 @@ async def on_app_shutdown():
 	mongodb.close()
 	redisdb.close()
 
-# 초기 세팅
-# @app.get("/api/test")
-# async def getTest():
-# 	data = {"name" : "yoHO!",
-# 	 		"token" : 123123213}
-# 	msg = json.dumps(data)
-# 	send_messages(msg)
-
-# @app.get("/api/test/test")
-# async def receivedTest():
-# 	print("test clear!")
-	
 
 # matching 요청을 받았을 때
 @app.post("/api/matching")
 async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token), ACCESS_AUTHORIZATION: Optional[str] = Header(None, convert_underscores = False)):
 	
-	set = Redis.MessageSet("matching" + userId)
+	set = Redis.MessageSet("matching:" + userId)
 	if set.exist():
 		raise MyCustomException(400, -1, "이미 매칭이 진행중입니다.")
 	
@@ -109,36 +97,32 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 		return MyCustomResponse(1, "매칭을 진행합니다.")
 
 
-
-
 # 카페의 매칭 응답 요청
 @app.post("/api/matching/cafe")
 async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, cafeId : str = Depends(verify_jwt_token)):
-	
-	set = Redis.MessageSet("matching" + matchingReqDto.userId)
-	if (set.exist() == None):
+	set = Redis.MessageSet("matching:" + matchingReqDto.userId)
+	if not set.exist():
 		raise MyCustomException(400, -1, "이미 매칭이 진행중입니다.")
 	
 	cafes = list(set.get_all())
 	set.delete()
 
 	collection = mongodb.client["jariBean"]["cafe"]
-	cafe = collection.find_one({"userId": cafeId})
 
 	collection = mongodb.client["jariBean"]["matching"]
 	
 	matching = Documents.Matching(
 		userId = matchingReqDto.userId,
-   		cafe = cafe,
-		number = matchingReqDto.peopleNumber,
-		status = Documents.Status("PROCESSING")
+   		cafeId = cafeId,
+		seating = int(matchingReqDto.peopleNumber),
+		status = Documents.Status.PROCESSING
 	)
-	result = collection.insert_one(matching.dict)
+	result = collection.insert_one(matching.dict())
 
 	sendingAcceptMessageToUserFromCafe(matchingReqDto.userId, result.inserted_id, cafeId)
 	
 	for cafeId in cafes:
-		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, matchingReqDto.userId)
+		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId.decode("utf-8"), matchingReqDto.userId)
 
 	return MyCustomResponse(1, "요청에 성공했습니다.")
 
@@ -147,7 +131,7 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 # 카페의 매칭 거절 요청
 @app.delete("/api/matching/cafe")
 async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, cafeId : str = Depends(verify_jwt_token)):
-	set = Redis.MessageSet("matching" + matchingReqDto.userId)
+	set = Redis.MessageSet("matching:" + matchingReqDto.userId)
 	set.remove(cafeId)
 
 	if set.delete_if_empty():
@@ -155,17 +139,16 @@ async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, 
 		
 	return MyCustomResponse(1, "매칭을 거절하였습니다.")
 
-
 # 유저의 매칭 취소 요청 - 매칭되기 이전
 @app.delete("/api/matching/before")
 async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
-	set = Redis.MessageSet("matching" + userId)
+	set = Redis.MessageSet("matching:" + userId)
 	cafes = list(set.get_all())
+	
 	for cafeId in cafes:
-		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, userId)
+		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId.decode("utf-8"), userId)
 	set.delete()
 	return MyCustomResponse(1, "매칭을 취소가 성공하였습니다.")
-
 
 # 유저의 매칭 취소 요청 - 매칭된 이후
 @app.put("/api/matching/after")
@@ -175,25 +158,29 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 	new_data = {
     	"$set": {
         	"status": "CANCEL",
-    	}	
+    	}
 	}
-	matching = collection.update_one({"_id": ObjectId(matchingCancelReqDto.matchingId)}, new_data)
+	collection.update_one({"_id": ObjectId(matchingCancelReqDto.matchingId)}, new_data)
+	matching = collection.find_one({"_id": ObjectId(matchingCancelReqDto.matchingId)})
 
 	current_time = datetime.datetime.now()
-	sendingCancelMessageToCafeFromUserAfterMatching(matching["cafeId"], matchingCancelReqDto.matchingId)
+	sendingCancelMessageToCafeFromUserAfterMatching(matchingCancelReqDto.cafeId, matchingCancelReqDto.matchingId)
 
-	if current_time - matching["matchingTime"] > 90:
-		# 추가적으로 결제가 되도록 하는 코드 필요
+	if current_time - matching["matchingTime"]> datetime.timedelta(seconds=10):
+		# TODO 결제 모듈
 		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급되지 않습니다.")
 	else:
 		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급됩니다.")
 
-
 @app.post("/api/matching/lambda")
-async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
+def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
 	if postMatchingMessageToCafe.running:
 		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행중입니다.")
-		
+	
+	new_set = Redis.MessageSet("matching:" + userId)
+	if new_set.exist():
+		raise MyCustomException(400, -1, "이미 매칭이 진행중입니다.")
+	
 	postMatchingMessageToCafe.running = True
 	number = matchingReqDto.peopleNumber
 
@@ -215,15 +202,14 @@ async def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, 
 
 		cafes = collection.find(query)
 		
-		new_set = Redis.MessageSet("matching" + userId)
 		
 		for cafe in cafes:
-			cafeId = str(cafe["userId"])
+			cafeId = str(cafe["_id"])
 			new_set.add(cafeId)
 			try:
 				sendingMatchingMessageToCafe(cafeId, userId, number)
 			except:
-				print(cafeId + "의 토큰이 없습니다.")
+				continue
 		new_set.expire()
 		return MyCustomResponse(1, "매칭이 진행중입니다. 잠시만 기다려주세요.")
 	finally:

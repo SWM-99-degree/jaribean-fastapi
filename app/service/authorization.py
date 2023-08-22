@@ -3,8 +3,10 @@ import json
 import os
 from typing import Optional
 import jwt
+from fastapi import  Header
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-from ..reqdto.responseDto import MyCustomException, MyCustomResponse
+from reqdto.responseDto import MyCustomException, MyCustomResponse
 
 async def verify_jwt_token(ACCESS_AUTHORIZATION: Optional[str] = Header(None, convert_underscores = False)):
     try:

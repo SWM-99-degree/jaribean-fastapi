@@ -8,10 +8,10 @@ from geojson import Point
 #from enum.Enum import UserRole
 
 class Status(str, Enum):
-    CANCEL : 'CANCEL'
-    PROCESSING : 'PROCESSING'
-    COMPLETE : "COMPLETE"
-    NOSHOW : "NOSHOW"
+    CANCEL = 'CANCEL'
+    PROCESSING = 'PROCESSING'
+    COMPLETE = "COMPLETE"
+    NOSHOW = "NOSHOW"
 
 class User(BaseModel):
     id : str
@@ -31,15 +31,13 @@ class Cafe(BaseModel):
     imageUrl : str
     instagramUrl : str
     coordinate : Point
-    #userRole : UserRole
     createdAt : datetime
     modifiedAt : datetime
 
 
 class Matching(BaseModel):
-    id : str
     userId : str
-    cafe: Cafe
-    number : int
+    cafeId: str
+    seating : int
     matchingTime : datetime = Field(default_factory=datetime.now)
     status : Status
