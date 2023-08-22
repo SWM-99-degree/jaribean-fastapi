@@ -11,15 +11,15 @@ from bson.son import SON
 import jwt
 
 
-from entity import Redis, Documents
-from entity import mongodb, redisdb
-from reqdto import requestDto
-from reqdto.responseDto import MyCustomException, MyCustomResponse
-from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
-from service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
-from service.sqsService import send_messages
-from service.authorization import verify_jwt_token
-from service.expireHandlerService import listenExpireEvents, expireCallBack
+from .entity import Redis, Documents
+from .entity import mongodb, redisdb
+from .reqdto import requestDto
+from .reqdto.responseDto import MyCustomException, MyCustomResponse
+from .service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
+from .service.firebaseService import testCode, sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser
+from .service.sqsService import send_messages
+from .service.authorization import verify_jwt_token
+from .service.expireHandlerService import listenExpireEvents, expireCallBack
 
 import threading
 import json
