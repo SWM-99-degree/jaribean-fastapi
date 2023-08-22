@@ -97,15 +97,9 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 		return MyCustomResponse(1, "매칭을 진행합니다.")
 
 
-
-
 # 카페의 매칭 응답 요청
 @app.post("/api/matching/cafe")
 async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, cafeId : str = Depends(verify_jwt_token)):
-	
-	# for test
-	cafeId = "64ddcf66e4c2060126013db1"
-	#
 	set = Redis.MessageSet("matching:" + matchingReqDto.userId)
 	if not set.exist():
 		raise MyCustomException(400, -1, "이미 매칭이 진행중입니다.")
@@ -138,14 +132,12 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 @app.delete("/api/matching/cafe")
 async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, cafeId : str = Depends(verify_jwt_token)):
 	set = Redis.MessageSet("matching:" + matchingReqDto.userId)
-	cafeId = "64ddcf66e4c2060126013db1"
 	set.remove(cafeId)
 
 	if set.delete_if_empty():
 		sendingCancelMessageToUser(matchingReqDto.userId)
 		
 	return MyCustomResponse(1, "매칭을 거절하였습니다.")
-
 
 # 유저의 매칭 취소 요청 - 매칭되기 이전
 @app.delete("/api/matching/before")
@@ -157,7 +149,6 @@ async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId.decode("utf-8"), userId)
 	set.delete()
 	return MyCustomResponse(1, "매칭을 취소가 성공하였습니다.")
-
 
 # 유저의 매칭 취소 요청 - 매칭된 이후
 @app.put("/api/matching/after")
@@ -176,15 +167,13 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 	sendingCancelMessageToCafeFromUserAfterMatching(matchingCancelReqDto.cafeId, matchingCancelReqDto.matchingId)
 
 	if current_time - matching["matchingTime"]> datetime.timedelta(seconds=10):
-		# 추가적으로 결제가 되도록 하는 코드 필요
+		# TODO 결제 모듈
 		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급되지 않습니다.")
 	else:
 		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급됩니다.")
 
-
 @app.post("/api/matching/lambda")
-def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto):#, userId : str = Depends(verify_jwt_token)):
-	userId = "64dc884b72a967459a2643c2"
+def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
 	if postMatchingMessageToCafe.running:
 		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행중입니다.")
 	
@@ -206,7 +195,7 @@ def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto):#, use
                 		"type" : "Point",
                 		"coordinates" :[matchingReqDto.longitude, matchingReqDto.latitude] #[126.661675911488, 37.450979037492] 
             		},
-            		"$maxDistance": 2000000
+            		"$maxDistance": 700
         		}
     		}
 		}
@@ -220,7 +209,7 @@ def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto):#, use
 			try:
 				sendingMatchingMessageToCafe(cafeId, userId, number)
 			except:
-				print(cafeId + "의 토큰이 없습니다.")
+				continue
 		new_set.expire()
 		return MyCustomResponse(1, "매칭이 진행중입니다. 잠시만 기다려주세요.")
 	finally:
