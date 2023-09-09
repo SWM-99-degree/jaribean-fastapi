@@ -14,11 +14,14 @@ import jwt
 from .entity import Redis, Documents
 from .entity import mongodb, redisdb
 from .reqdto import requestDto
-from .reqdto.responseDto import MyCustomException, MyCustomResponse
+from .reqdto.responseDto import MyCustomException, MyCustomResponse, MatchingResponse
 from .service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
 from .service.firebaseService import sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser, listenExpireEvents
 from .service.sqsService import send_messages
 from .service.authorization import verify_jwt_token
+
+# for test
+from .service.firebaseService import testSend
 
 import threading
 import json
@@ -43,6 +46,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
 
 @app.exception_handler(MyCustomException)
 def customExceptionHandler(request: Request, exc: MyCustomException):
@@ -70,6 +75,12 @@ def on_app_start():
 async def on_app_shutdown():
 	mongodb.close()
 	redisdb.close()
+
+# for Test API
+@app.get("/api/test")
+async def sendMessage():
+	token = 'eiMZvMU4TvCk4BNeUEHBoz:APA91bG6uf_mg9I70YslVe4E6nOvrP6pvFkZ8BVIF-8YDnfqYM0tLNQYtMG6pVFdaHCBWWwEbsRBZg5GJ4MHp6RBTgufDOrXovJYxz53xGPWTXpLAEbfTtTmTXV7dtKR8PDENqpOPF74'
+	testSend(token)
 
 
 # matching 요청을 받았을 때
@@ -123,7 +134,7 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	for cafeId in cafes:
 		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId.decode("utf-8"), matchingReqDto.userId)
 
-	return MyCustomResponse(1, "요청에 성공했습니다.")
+	return MatchingResponse(1, "요청에 성공했습니다.", result.inserted_id)
 
 
 
@@ -240,6 +251,10 @@ def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depe
 def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["jariBean"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
+
+	if result["userId"] == userId and datetime.datetime.now() - result["matchingTime"]> datetime.timedelta(seconds=630):
+		raise MyCustomException(400, -1, "10분이 지나서 처리가 불가능합니다.")
+
 	if result['status'] != "PROCESSING":
 		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행되었습니다.")
 	
