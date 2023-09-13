@@ -11,6 +11,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, "jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"))
 
 token_domain = "Token:"
+# local ../ server /code/
 cred_path = "/code/jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"
 cred = credentials.Certificate(cred_path)
 firebase_admin.initialize_app(cred)
@@ -135,7 +136,7 @@ def sendingCancelMessageToUser(userId):
 
     response = messaging.send(sendFCM)
 
-def sendingCancelMessageToCafeFromUserAfterMatching(cafeId, matchingId):
+def sendingCancelMessageToCafeFromUserAfterMatching(cafeId, matchingId, username):
     global token_domain
     userToken = Redis.Redis(str(token_domain+str(cafeId))).getToken()
 
@@ -145,6 +146,7 @@ def sendingCancelMessageToCafeFromUserAfterMatching(cafeId, matchingId):
         notification = notification,
         android = androidConfig,
         data = {
+            "username" : str(username),
             "userId" : str(matchingId),
             "direction" : "cancel",
             "type" : "matchingCancelAfterMatching"
@@ -173,7 +175,7 @@ def sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, userId):
     response = messaging.send(sendFCM)
 
 
-def sendingMatchingMessageToCafe(cafeId, userId, peopleNumber):
+def sendingMatchingMessageToCafe(cafeId, userId, peopleNumber, username):
     global token_domain
     userToken = Redis.Redis(str(token_domain+cafeId)).getToken()
 
@@ -183,6 +185,7 @@ def sendingMatchingMessageToCafe(cafeId, userId, peopleNumber):
         notification = notification,
         android = androidConfig,
         data = {
+            "username" : str(username),
             "userId" : str(userId),
             "peopleNumber" : str(peopleNumber),
             "type" : "matchingRequest"

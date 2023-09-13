@@ -77,16 +77,16 @@ async def on_app_shutdown():
 	redisdb.close()
 
 # for Test API
-@app.get("/api/test")
-async def sendMessage():
-	token = 'eiMZvMU4TvCk4BNeUEHBoz:APA91bG6uf_mg9I70YslVe4E6nOvrP6pvFkZ8BVIF-8YDnfqYM0tLNQYtMG6pVFdaHCBWWwEbsRBZg5GJ4MHp6RBTgufDOrXovJYxz53xGPWTXpLAEbfTtTmTXV7dtKR8PDENqpOPF74'
-	testSend(token)
+# @app.get("/api/test")
+# async def sendMessage(payload : dict() = Depends(verify_jwt_token)):
+# 	print(payload["username"])
+	
 
 
 # matching 요청을 받았을 때
 @app.post("/api/matching")
-async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token), ACCESS_AUTHORIZATION: Optional[str] = Header(None, convert_underscores = False)):
-	
+async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, payload : dict() = Depends(verify_jwt_token), ACCESS_AUTHORIZATION: Optional[str] = Header(None, convert_underscores = False)):
+	userId = payload["userId"]
 	set = Redis.MessageSet("matching:" + userId)
 	if set.exist():
 		raise MyCustomException(400, -1, "이미 매칭이 진행중입니다.")
@@ -109,7 +109,9 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, userId
 
 # 카페의 매칭 응답 요청
 @app.post("/api/matching/cafe")
-async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, cafeId : str = Depends(verify_jwt_token)):
+async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, payload : dict() = Depends(verify_jwt_token)):
+	cafeId = payload["userId"]
+
 	set = Redis.MessageSet("matching:" + matchingReqDto.userId)
 	if not set.exist():
 		raise MyCustomException(400, -1, "이미 매칭이 진행중입니다.")
@@ -134,13 +136,14 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	for cafeId in cafes:
 		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId.decode("utf-8"), matchingReqDto.userId)
 
-	return MatchingResponse(1, "요청에 성공했습니다.", result.inserted_id)
+	return MatchingResponse(1, "요청에 성공했습니다.", result.inserted_id, matchingReqDto.userId)
 
 
 
 # 카페의 매칭 거절 요청
 @app.delete("/api/matching/cafe")
-async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, cafeId : str = Depends(verify_jwt_token)):
+async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, payload : dict() = Depends(verify_jwt_token)):
+	cafeId = payload["userId"]
 	set = Redis.MessageSet("matching:" + matchingReqDto.userId)
 	set.remove(cafeId)
 
@@ -151,7 +154,9 @@ async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, 
 
 # 유저의 매칭 취소 요청 - 매칭되기 이전
 @app.delete("/api/matching/before")
-async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
+async def cancelMatchingBefore(payload : dict() = Depends(verify_jwt_token)):
+	userId = payload["userId"]
+	username = payload["username"]
 	set = Redis.MessageSet("matching:" + userId)
 	cafes = list(set.get_all())
 	
@@ -162,7 +167,10 @@ async def cancelMatchingBefore(userId : str = Depends(verify_jwt_token)):
 
 # 유저의 매칭 취소 요청 - 매칭된 이후
 @app.put("/api/matching/after")
-async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
+async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelReqDto, payload = Depends(verify_jwt_token)):
+	uuserId = payload["userId"]
+	username = payload["username"]
+
 	collection = mongodb.client["jariBean"]["matching"]
 	
 	new_data = {
@@ -174,7 +182,7 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 	matching = collection.find_one({"_id": ObjectId(matchingCancelReqDto.matchingId)})
 
 	current_time = datetime.datetime.now()
-	sendingCancelMessageToCafeFromUserAfterMatching(matchingCancelReqDto.cafeId, matchingCancelReqDto.matchingId)
+	sendingCancelMessageToCafeFromUserAfterMatching(matchingCancelReqDto.cafeId, matchingCancelReqDto.matchingId, username)
 
 	if current_time - matching["matchingTime"]> datetime.timedelta(seconds=10):
 		# TODO 결제 모듈
@@ -183,7 +191,9 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급됩니다.")
 
 @app.post("/api/matching/lambda")
-def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, userId : str = Depends(verify_jwt_token)):
+def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, payload : dict() = Depends(verify_jwt_token)):
+	userId = payload["userId"]
+	
 	if postMatchingMessageToCafe.running:
 		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행중입니다.")
 	
@@ -248,7 +258,9 @@ def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depe
 
 
 @app.put("/api/matching/complete")
-def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
+def putComplete(matchingReq : requestDto.MatchingCancelReqDto, payload : dict() = Depends(verify_jwt_token)):
+	userId = payload["userId"]
+	username = payload["username"]
 	collection = mongodb.client["jariBean"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
 
@@ -266,6 +278,6 @@ def putComplete(matchingReq : requestDto.MatchingCancelReqDto, userId : str = De
 
 	collection.update_one({"_id": ObjectId(matchingReq.matchingId)}, new_data)
 
-	sendingCompleteMessageToCafe(userId, matchingReq.matchingId, matchingReq.cafeId)
+	sendingCompleteMessageToCafe(userId, matchingReq.matchingId, matchingReq.cafeId, username)
 
 	return MyCustomResponse(1, "매칭이 완료되었습니다.")
