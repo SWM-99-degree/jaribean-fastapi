@@ -12,7 +12,7 @@ load_dotenv(os.path.join(BASE_DIR, "jaribean-3af6f-firebase-adminsdk-voaca-c380f
 
 token_domain = "Token:"
 # local ../ server /code/
-cred_path = "/code/jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"
+cred_path = "../jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"
 cred = credentials.Certificate(cred_path)
 firebase_admin.initialize_app(cred)
 
@@ -46,33 +46,24 @@ def androidNotification(title, body):
     return androidConfig, notification
      
 
-def testSend(token):
-     androidNotification = messaging.AndroidNotification(
-            title = "매칭 성공 완료!",
-            body = str("123") + "와 매칭이 시작되었습니다!",
-            channel_id = "jari_bean_alert",
-            priority = "high"
-        )
-     androidConfig = messaging.AndroidConfig(
-          notification = androidNotification
-     )
-     notification = messaging.Notification(
-        title = "매칭 성공 완료!",
-        body = str("123") + "와 매칭이 시작되었습니다!"
-    )
-     sendFCM = messaging.Message(
+def testSend(token, userId, username, peopleNumber):
+    userToken = token
+
+    androidConfig, notification = androidNotification("매칭 요청!", "새로운 매칭 요청입니다!")
+    
+    sendFCM = messaging.Message(
         notification = notification,
         android = androidConfig,
-        data = { 
-            "userId" : str("123") ,
-            "cafeId" : str("123") ,
-            "matchingId" : str("matchingId"),
-            "direction" : "matching",
-            "type" : "matchingSuccess"
+        data = {
+            "username" : str(username),
+            "userId" : str(userId),
+            "peopleNumber" : str(peopleNumber),
+            "type" : "matchingRequest"
         },
-        token = token
+        token = userToken
     )
-     response = messaging.send(sendFCM)
+    response = messaging.send(sendFCM)
+    return sendFCM, response
      
 
 def sendingCompleteMessageToCafe(userId, matchingId, cafeId):

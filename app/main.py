@@ -11,17 +11,17 @@ from bson.son import SON
 import jwt
 
 
-from .entity import Redis, Documents
-from .entity import mongodb, redisdb
-from .reqdto import requestDto
-from .reqdto.responseDto import MyCustomException, MyCustomResponse, MatchingResponse
-from .service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
-from .service.firebaseService import sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser, listenExpireEvents
-from .service.sqsService import send_messages
-from .service.authorization import verify_jwt_token
+from entity import Redis, Documents
+from entity import mongodb, redisdb
+from reqdto import requestDto
+from reqdto.responseDto import MyCustomException, MyCustomResponse, MatchingResponse
+from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
+from service.firebaseService import sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser, listenExpireEvents
+from service.sqsService import send_messages
+from service.authorization import verify_jwt_token
 
 # for test
-from .service.firebaseService import testSend
+from service.firebaseService import testSend
 
 import threading
 import json
@@ -77,9 +77,15 @@ async def on_app_shutdown():
 	redisdb.close()
 
 # for Test API
-# @app.get("/api/test")
-# async def sendMessage(payload : dict() = Depends(verify_jwt_token)):
-# 	print(payload["username"])
+@app.get("/api/test")
+async def sendMessage(payload : dict() = Depends(verify_jwt_token)):
+	token = "etamJTimEHR6YNeGgB1Ma8:APA91bFvfbNUmY4aX1qwj16hdRodjmaAniKIWHPgTGi_z-8F0xYhiA_PYq-9_O2pDUcie4KJehU85joqe04DVABc0O2Z0OHHxVgj28t-_5n0ajaVP7zPwB_ZfJJc5pCrNJvt_sYgm4yJ"
+	fcm, response = testSend(token, payload["userId"], payload["username"], 2)
+	new_list = list(map(str, response.split("/")))
+	fcmLogging(fcm, new_list[3], payload["userId"])
+	print(fcm)
+	shdsj = str(fcm)
+	print(shdsj)
 	
 
 
@@ -119,13 +125,18 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	cafes = list(set.get_all())
 	set.delete()
 
+	collection = mongodb.client["jariBean"]["user"]
+	user = await collection.find_one({"_id": ObjectId(matchingReqDto.userId)})
+
 	collection = mongodb.client["jariBean"]["cafe"]
+	cafe = await collection.find_one({"_id": ObjectId(cafeId)})
 
 	collection = mongodb.client["jariBean"]["matching"]
 	
 	matching = Documents.Matching(
 		userId = matchingReqDto.userId,
-   		cafeId = cafeId,
+		username = user["name"],
+   		cafe = cafe,
 		seating = int(matchingReqDto.peopleNumber),
 		status = Documents.Status.PROCESSING
 	)
@@ -281,3 +292,13 @@ def putComplete(matchingReq : requestDto.MatchingCancelReqDto, payload : dict() 
 	sendingCompleteMessageToCafe(userId, matchingReq.matchingId, matchingReq.cafeId, username)
 
 	return MyCustomResponse(1, "매칭이 완료되었습니다.")
+
+def fcmLogging(fcmMessage, messageId, userId):
+	collection = mongodb.client["jariBean"]["fcmlogging"]
+	data = {
+		"messageId" : messageId,
+		"userId" : userId,
+		"fcmMessage" : str(fcmMessage),
+		"status" : 1
+	}
+	collection.insert_one(data)
