@@ -3,6 +3,7 @@ from firebase_admin import credentials
 from firebase_admin import messaging
 
 from entity import Redis
+from .loggingService import sendFCMLogging
 
 import os
 from dotenv import load_dotenv
@@ -12,7 +13,7 @@ load_dotenv(os.path.join(BASE_DIR, "jaribean-3af6f-firebase-adminsdk-voaca-c380f
 
 token_domain = "Token:"
 # local ../ server /code/
-cred_path = "../jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"
+cred_path = "/code/jaribean-3af6f-firebase-adminsdk-voaca-c380f36f12.json"
 cred = credentials.Certificate(cred_path)
 firebase_admin.initialize_app(cred)
 
@@ -62,6 +63,11 @@ def testSend(token, userId, username, peopleNumber):
         },
         token = userToken
     )
+
+    messageId = sendFCMLogging(sendFCM, "FromServer", userId)
+    sendFCM.data['loggingId'] = str(messageId)
+
+    print(sendFCM)
     response = messaging.send(sendFCM)
     return sendFCM, response
      
@@ -88,44 +94,6 @@ def sendingCompleteMessageToCafe(userId, matchingId, cafeId):
 
 
 
-def sendingAcceptMessageToUserFromCafe(userId, matchingId, cafeId):
-    global token_domain
-    userToken = Redis.Redis(token_domain+str(userId)).getToken()
-
-    androidConfig, notification = androidNotification("매칭 성공!", str(cafeId) + "와 매칭이 성사되었습니다.")
-
-    sendFCM = messaging.Message(
-        notification = notification,
-        android = androidConfig,
-        data = { 
-            "userId" : str(userId),
-            "cafeId" : str(cafeId),
-            "matchingId" : str(matchingId),
-            "direction" : "matching",
-            "type" : "matchingSuccess"
-        },
-        token = userToken
-    )
-    response = messaging.send(sendFCM)
-
-
-def sendingCancelMessageToUser(userId):
-    global token_domain
-    userToken = Redis.Redis(token_domain+str(userId)).getToken()
-
-    androidConfig, notification = androidNotification("매칭 실패!", "주변에 매칭 가능한 카페가 없습니다.")
-
-    sendFCM = messaging.Message(
-        android = androidConfig,
-        notification = notification,
-        data = {
-            'userId' : str(userId),
-            'direction' : 'cancel',
-            'type' : 'matchingFail'
-        },
-        token = userToken)
-
-    response = messaging.send(sendFCM)
 
 def sendingCancelMessageToCafeFromUserAfterMatching(cafeId, matchingId, username):
     global token_domain
@@ -183,4 +151,52 @@ def sendingMatchingMessageToCafe(cafeId, userId, peopleNumber, username):
         },
         token = userToken
     )
+    response = messaging.send(sendFCM)
+
+
+
+# 전송 보장이 꼭 필요한 로직들
+def sendingAcceptMessageToUserFromCafe(userId, matchingId, cafeId):
+    global token_domain
+    userToken = Redis.Redis(token_domain+str(userId)).getToken()
+
+    androidConfig, notification = androidNotification("매칭 성공!", str(cafeId) + "와 매칭이 성사되었습니다.")
+
+    sendFCM = messaging.Message(
+        notification = notification,
+        android = androidConfig,
+        data = { 
+            "userId" : str(userId),
+            "cafeId" : str(cafeId),
+            "matchingId" : str(matchingId),
+            "direction" : "matching",
+            "type" : "matchingSuccess"
+        },
+        token = userToken
+    )
+    messageId = sendFCMLogging(sendFCM, cafeId, userId)
+
+    sendFCM.data['loggingId'] = str(messageId)
+    response = messaging.send(sendFCM)
+
+
+def sendingCancelMessageToUser(userId):
+    global token_domain
+    userToken = Redis.Redis(token_domain+str(userId)).getToken()
+
+    androidConfig, notification = androidNotification("매칭 실패!", "주변에 매칭 가능한 카페가 없습니다.")
+
+    sendFCM = messaging.Message(
+        android = androidConfig,
+        notification = notification,
+        data = {
+            'userId' : str(userId),
+            'direction' : 'cancel',
+            'type' : 'matchingFail'
+        },
+        token = userToken)
+    
+    messageId = sendFCMLogging(sendFCM, "FromServer", userId)
+
+    sendFCM.data['loggingId'] = str(messageId)
     response = messaging.send(sendFCM)

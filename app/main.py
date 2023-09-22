@@ -11,17 +11,18 @@ from bson.son import SON
 import jwt
 
 
-from entity import Redis, Documents
-from entity import mongodb, redisdb
-from reqdto import requestDto
-from reqdto.responseDto import MyCustomException, MyCustomResponse, MatchingResponse
-from service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
-from service.firebaseService import sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser, listenExpireEvents
-from service.sqsService import send_messages
-from service.authorization import verify_jwt_token
+from .entity import Redis, Documents
+from .entity import mongodb, redisdb
+from .reqdto import requestDto
+from .reqdto.responseDto import MyCustomException, MyCustomResponse, MatchingResponse
+from .service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
+from .service.firebaseService import sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser, listenExpireEvents
+from .service.sqsService import send_messages
+from .service.authorization import verify_jwt_token
+from .service.loggingService import changeFCMLoggingStatusReceive
 
 # for test
-from service.firebaseService import testSend
+# from .service.firebaseService import testSend
 
 import threading
 import json
@@ -77,16 +78,24 @@ async def on_app_shutdown():
 	redisdb.close()
 
 # for Test API
-@app.get("/api/test")
-async def sendMessage(payload : dict() = Depends(verify_jwt_token)):
-	token = "etamJTimEHR6YNeGgB1Ma8:APA91bFvfbNUmY4aX1qwj16hdRodjmaAniKIWHPgTGi_z-8F0xYhiA_PYq-9_O2pDUcie4KJehU85joqe04DVABc0O2Z0OHHxVgj28t-_5n0ajaVP7zPwB_ZfJJc5pCrNJvt_sYgm4yJ"
-	fcm, response = testSend(token, payload["userId"], payload["username"], 2)
-	new_list = list(map(str, response.split("/")))
-	fcmLogging(fcm, new_list[3], payload["userId"])
-	print(fcm)
-	shdsj = str(fcm)
-	print(shdsj)
+# @app.get("/api/test")
+# async def sendMessage(payload : dict() = Depends(verify_jwt_token)):
+# 	token = "dLTGtJtQvqIaetrRbL9oua:APA91bF9B_2y_O2knqc6YedBLHgCyMdY-M1mkKSN3SBzcKngNKzQ0JAyPYe8MVgwUvMZrApvw7JAx9G1yu0YtKHROj6ySMVrsItNVM3w4zr2FmumWQbLlhljMHqVs_J_q6yHeYC92L7E"
+# 	fcm, response = testSend(token, payload["userId"], payload["username"], 2)
+# 	new_list = list(map(str, response.split("/")))
 	
+
+@app.post("/api/fcm")
+def postCheckingReceiveFCM(loggingId : str ,payload : dict() = Depends(verify_jwt_token)):
+	try:
+		changeFCMLoggingStatusReceive(loggingId)
+
+	except:
+		raise MyCustomException(400, -1, "서버의 오류로 FCMLoggind이 불가능합니다.")
+	return MyCustomResponse(1, "FCM 요청이 완료되었습니다.")
+
+
+
 
 
 # matching 요청을 받았을 때
@@ -267,7 +276,6 @@ def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depe
 	return MyCustomResponse(1, "매칭 요청의 상태가 No-SHOW 로 변경되었습니다.")
 
 
-
 @app.put("/api/matching/complete")
 def putComplete(matchingReq : requestDto.MatchingCancelReqDto, payload : dict() = Depends(verify_jwt_token)):
 	userId = payload["userId"]
@@ -292,13 +300,3 @@ def putComplete(matchingReq : requestDto.MatchingCancelReqDto, payload : dict() 
 	sendingCompleteMessageToCafe(userId, matchingReq.matchingId, matchingReq.cafeId, username)
 
 	return MyCustomResponse(1, "매칭이 완료되었습니다.")
-
-def fcmLogging(fcmMessage, messageId, userId):
-	collection = mongodb.client["jariBean"]["fcmlogging"]
-	data = {
-		"messageId" : messageId,
-		"userId" : userId,
-		"fcmMessage" : str(fcmMessage),
-		"status" : 1
-	}
-	collection.insert_one(data)
