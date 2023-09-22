@@ -188,7 +188,7 @@ async def cancelMatchingBefore(payload : dict() = Depends(verify_jwt_token)):
 # 유저의 매칭 취소 요청 - 매칭된 이후
 @app.put("/api/matching/after")
 async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelReqDto, payload = Depends(verify_jwt_token)):
-	uuserId = payload["userId"]
+	userId = payload["userId"]
 	username = payload["username"]
 
 	collection = mongodb.client["jariBean"]["matching"]
@@ -202,7 +202,7 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 	matching = collection.find_one({"_id": ObjectId(matchingCancelReqDto.matchingId)})
 
 	current_time = datetime.datetime.now()
-	sendingCancelMessageToCafeFromUserAfterMatching(matchingCancelReqDto.cafeId, matchingCancelReqDto.matchingId, username)
+	sendingCancelMessageToCafeFromUserAfterMatching(matchingCancelReqDto.cafeId, matchingCancelReqDto.matchingId, username, userId)
 
 	if current_time - matching["matchingTime"]> datetime.timedelta(seconds=10):
 		# TODO 결제 모듈

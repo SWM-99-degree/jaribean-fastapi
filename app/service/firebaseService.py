@@ -72,47 +72,8 @@ def testSend(token, userId, username, peopleNumber):
     return sendFCM, response
      
 
-def sendingCompleteMessageToCafe(userId, matchingId, cafeId):
-    global token_domain
-    userToken = Redis.Redis(token_domain+str(cafeId)).getToken()
-
-    androidConfig, notification = androidNotification("매칭 완료 성공!", str(userId) + "와 매칭이 완료되었습니다.")
-    
-    sendFCM = messaging.Message(
-        notification = notification,
-        android = androidConfig,
-        data = {
-            "userId" : userId,
-            "cafeId" : cafeId,
-            "matchingId" : matchingId,
-            "direction" : "complete",
-            "type" : "matchingComplete"
-        },
-        token = userToken
-    )
-    response = messaging.send(sendFCM)
 
 
-
-
-def sendingCancelMessageToCafeFromUserAfterMatching(cafeId, matchingId, username):
-    global token_domain
-    userToken = Redis.Redis(str(token_domain+str(cafeId))).getToken()
-
-    androidConfig, notification = androidNotification("매칭 취소!", "유저가 매칭 취소 요청을 보냈습니다.")
-
-    sendFCM = messaging.Message(
-        notification = notification,
-        android = androidConfig,
-        data = {
-            "username" : str(username),
-            "userId" : str(matchingId),
-            "direction" : "cancel",
-            "type" : "matchingCancelAfterMatching"
-        },
-        token = userToken
-    )
-    response = messaging.send(sendFCM)
 
 
 def sendingCancelMessageToCafeFromUserBeforeMatching(cafeId, userId):
@@ -198,5 +159,48 @@ def sendingCancelMessageToUser(userId):
     
     messageId = sendFCMLogging(sendFCM, "FromServer", userId)
 
+    sendFCM.data['loggingId'] = str(messageId)
+    response = messaging.send(sendFCM)
+
+def sendingCancelMessageToCafeFromUserAfterMatching(cafeId, matchingId, username, userId):
+    global token_domain
+    userToken = Redis.Redis(str(token_domain+str(cafeId))).getToken()
+
+    androidConfig, notification = androidNotification("매칭 취소!", "유저가 매칭 취소 요청을 보냈습니다.")
+
+    sendFCM = messaging.Message(
+        notification = notification,
+        android = androidConfig,
+        data = {
+            "username" : str(username),
+            "matchingId" : str(matchingId),
+            "direction" : "cancel",
+            "type" : "matchingCancelAfterMatching"
+        },
+        token = userToken
+    )
+    messageId = sendFCMLogging(sendFCM, userId, cafeId)
+    sendFCM.data['loggingId'] = str(messageId)
+    response = messaging.send(sendFCM)
+
+def sendingCompleteMessageToCafe(userId, matchingId, cafeId):
+    global token_domain
+    userToken = Redis.Redis(token_domain+str(cafeId)).getToken()
+
+    androidConfig, notification = androidNotification("매칭 완료 성공!", str(userId) + "와 매칭이 완료되었습니다.")
+    
+    sendFCM = messaging.Message(
+        notification = notification,
+        android = androidConfig,
+        data = {
+            "userId" : userId,
+            "cafeId" : cafeId,
+            "matchingId" : matchingId,
+            "direction" : "complete",
+            "type" : "matchingComplete"
+        },
+        token = userToken
+    )
+    messageId = sendFCMLogging(sendFCM, userId, cafeId)
     sendFCM.data['loggingId'] = str(messageId)
     response = messaging.send(sendFCM)
