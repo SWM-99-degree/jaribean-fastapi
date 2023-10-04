@@ -13,4 +13,3 @@ class MatchingCafeReqDto(BaseModel):
 
 class MatchingCancelReqDto(BaseModel):
     matchingId : str = None
-    cafeId : str
