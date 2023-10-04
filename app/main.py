@@ -297,6 +297,7 @@ def putComplete(matchingReq : requestDto.MatchingCancelReqDto, payload : dict() 
 
 	collection.update_one({"_id": ObjectId(matchingReq.matchingId)}, new_data)
 
-	sendingCompleteMessageToCafe(userId, matchingReq.matchingId, matchingReq.cafeId, username)
+	if payload["userRame"] != "MANAGET":
+		sendingCompleteMessageToCafe(userId, matchingReq.matchingId, matchingReq.cafeId, username)
 
 	return MyCustomResponse(1, "매칭이 완료되었습니다.")
