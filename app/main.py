@@ -85,7 +85,7 @@ async def on_app_shutdown():
 # 	new_list = list(map(str, response.split("/")))
 	
 
-@app.post("/api/fcm")
+@app.post("/api/matching/fcm")
 def postCheckingReceiveFCM(loggingId : str ,payload : dict() = Depends(verify_jwt_token)):
 	try:
 		changeFCMLoggingStatusReceive(loggingId)
@@ -263,6 +263,7 @@ postMatchingMessageToCafe.running = False
 def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
 	collection = mongodb.client["jariBean"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
+	print(result)
 	if result['status'] != "PROCESSING":
 		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행되었습니다.")
 	
@@ -297,7 +298,7 @@ def putComplete(matchingReq : requestDto.MatchingCancelReqDto, payload : dict() 
 
 	collection.update_one({"_id": ObjectId(matchingReq.matchingId)}, new_data)
 
-	if payload["userRame"] != "MANAGET":
+	if payload["userRole"] != "MANAGER":
 		sendingCompleteMessageToCafe(userId, matchingReq.matchingId, matchingReq.cafeId, username)
 
 	return MyCustomResponse(1, "매칭이 완료되었습니다.")
