@@ -213,6 +213,7 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 @app.post("/api/matching/lambda")
 def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, payload : dict() = Depends(verify_jwt_token)):
 	userId = payload["userId"]
+	username = payload["username"]
 	
 	if postMatchingMessageToCafe.running:
 		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행중입니다.")
@@ -247,7 +248,7 @@ def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, payloa
 			cafeId = str(cafe["_id"])
 			new_set.add(cafeId)
 			try:
-				sendingMatchingMessageToCafe(cafeId, userId, number)
+				sendingMatchingMessageToCafe(cafeId, userId, number, username)
 			except:
 				continue
 		new_set.expire()
