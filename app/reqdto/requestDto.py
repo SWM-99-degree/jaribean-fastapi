@@ -7,6 +7,7 @@ class MatchingReqDto(BaseModel):
     longitude : float
 
 
+
 class MatchingCafeReqDto(BaseModel):
     peopleNumber : int
     userId : str

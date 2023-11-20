@@ -14,7 +14,7 @@ import jwt
 from .entity import Redis, Documents
 from .entity import mongodb, redisdb
 from .reqdto import requestDto
-from .reqdto.responseDto import MyCustomException, MyCustomResponse, MatchingResponse
+from .reqdto.responseDto import MyCustomException, MyCustomResponse, MatchingResponse, CheckingResponse
 from .service.matchingService import cafePutSSEMessage, cafeFastPutSSEMessage, userPutSSEMessage, getSSEMessage
 from .service.firebaseService import sendingCompleteMessageToCafe, sendingAcceptMessageToUserFromCafe, sendingMatchingMessageToCafe, sendingCancelMessageToCafeFromUserBeforeMatching, sendingCancelMessageToCafeFromUserAfterMatching, sendingCancelMessageToUser, listenExpireEvents
 from .service.sqsService import send_messages
@@ -134,13 +134,13 @@ async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto,
 	cafes = list(set.get_all())
 	set.delete()
 
-	collection = mongodb.client["jariBean"]["user"]
+	collection = mongodb.client["jariBeanProd"]["user"]
 	user = await collection.find_one({"_id": ObjectId(matchingReqDto.userId)})
 
-	collection = mongodb.client["jariBean"]["cafe"]
+	collection = mongodb.client["jariBeanProd"]["cafe"]
 	cafe = await collection.find_one({"_id": ObjectId(cafeId)})
 
-	collection = mongodb.client["jariBean"]["matching"]
+	collection = mongodb.client["jariBeanProd"]["matching"]
 	
 	matching = Documents.Matching(
 		userId = matchingReqDto.userId,
@@ -191,7 +191,7 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 	userId = payload["userId"]
 	username = payload["username"]
 
-	collection = mongodb.client["jariBean"]["matching"]
+	collection = mongodb.client["jariBeanProd"]["matching"]
 	
 	new_data = {
     	"$set": {
@@ -208,7 +208,30 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 		# TODO 결제 모듈
 		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급되지 않습니다.")
 	else:
-		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급됩니다.")
+		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급됩니다.")	
+
+@app.get("/api/matching/status")
+def checkingMatchingProcessing(payload : dict() = Depends(verify_jwt_token)):
+	userId = payload["userId"]
+	new_set = Redis.MessageSet("matching:" + userId)
+	if new_set.exist():
+		return CheckingResponse(1, "매칭 요청이 진행중입니다.", "ENQUEUED")
+	
+	current_time = datetime.datetime.now()
+	ten_minutes_ago = current_time - datetime.timedelta(minutes=10)
+	collection = mongodb.client["jariBeanProd"]["matching"]
+	query = {
+		"matchingTime": {"$lt": current_time, "$gte": ten_minutes_ago},
+		"userId": userId,
+		"status" : "PROCESS"
+	}
+	data = collection.find_one(query)
+	if data == None:
+		return CheckingResponse(1, "매칭이 진행중입니다.", "PROCESSING", str(data._id), str(data.cafe._id))
+	return CheckingResponse(1, "매칭이 진행중이지 않습니다.", "NORMAL")
+	
+
+
 
 @app.post("/api/matching/lambda")
 def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, payload : dict() = Depends(verify_jwt_token)):
@@ -216,7 +239,7 @@ def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, payloa
 	username = payload["username"]
 	
 	if postMatchingMessageToCafe.running:
-		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행중입니다.")
+		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행중입니다.") #이런식으로 텍스트를 박아놓으면 확장성이 안좋지않을까요??? 수정 부탁드립니다..
 	
 	new_set = Redis.MessageSet("matching:" + userId)
 	if new_set.exist():
@@ -226,7 +249,7 @@ def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, payloa
 	number = matchingReqDto.peopleNumber
 
 	try:
-		collection = mongodb.client["jariBean"]["cafe"]
+		collection = mongodb.client["jariBeanProd"]["cafe"]
 
 		collection.create_index([("coordinate", "2dsphere")])
 		query = {
@@ -243,6 +266,11 @@ def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, payloa
 
 		cafes = collection.find(query)
 		
+		# this is for 바로 매칭 실패
+		if cafes == None:
+			sendingCancelMessageToUser(userId)
+			new_set.delete()
+			return MyCustomResponse(1, "가능한 카페가 없습니다. 다른 곳에서 매칭을 진행해주세요.")
 		
 		for cafe in cafes:
 			cafeId = str(cafe["_id"])
@@ -262,7 +290,7 @@ postMatchingMessageToCafe.running = False
 
 @app.put("/api/matching/noshow")
 def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depends(verify_jwt_token)):
-	collection = mongodb.client["jariBean"]["matching"]
+	collection = mongodb.client["jariBeanProd"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
 	print(result)
 	if result['status'] != "PROCESSING":
@@ -282,7 +310,7 @@ def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depe
 def putComplete(matchingReq : requestDto.MatchingCancelReqDto, payload : dict() = Depends(verify_jwt_token)):
 	userId = payload["userId"]
 	username = payload["username"]
-	collection = mongodb.client["jariBean"]["matching"]
+	collection = mongodb.client["jariBeanProd"]["matching"]
 	result = collection.find_one({"_id": ObjectId(matchingReq.matchingId)})
 
 	if result["userId"] == userId and datetime.datetime.now() - result["matchingTime"]> datetime.timedelta(seconds=630):

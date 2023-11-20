@@ -4,7 +4,11 @@ from enum import Enum
 from dotenv import load_dotenv
 from bson.objectid import ObjectId
 
+
 from entity import mongodb
+
+
+mongodb.connect()
 
 class FCMStatus(Enum):
     FIRST = 1
@@ -13,7 +17,7 @@ class FCMStatus(Enum):
     SUCCESS = 0
 
 def changeFCMLoggingStatusReceive(loggingId):
-    collection = mongodb.client["jariBean"]["fcmlogging"]
+    collection = mongodb.client["jariBeanProd"]["fcmlogging"]
     
     changeStatus = {
         "$set" : {
@@ -25,7 +29,7 @@ def changeFCMLoggingStatusReceive(loggingId):
     
 
 def sendFCMLogging(message, userId, receiveId):
-    collection = mongodb.client["jariBean"]["fcmlogging"]
+    collection = mongodb.client["jariBeanProd"]["fcmlogging"]
 
     data = {
         "sendId" : userId,

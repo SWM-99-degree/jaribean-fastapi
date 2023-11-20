@@ -18,8 +18,9 @@ cred = credentials.Certificate(cred_path)
 firebase_admin.initialize_app(cred)
 
 def expireCallBack(message):
-	userId = str(message["data"].decode("utf-8")[9:])
-	sendingCancelMessageToUser(userId)
+    userId = str(message["data"].decode("utf-8")[9:])
+    print(userId)
+    sendingCancelMessageToUser(userId)
 	
 
 async def listenExpireEvents():
