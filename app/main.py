@@ -64,7 +64,7 @@ def customExceptionHandler(request: Request, exc: MyCustomException):
 
 def start_listening():
     asyncio.run(listenExpireEvents())
-    
+
 
 @app.on_event("startup")
 def on_app_start():
@@ -83,7 +83,7 @@ async def on_app_shutdown():
 # 	token = "dLTGtJtQvqIaetrRbL9oua:APA91bF9B_2y_O2knqc6YedBLHgCyMdY-M1mkKSN3SBzcKngNKzQ0JAyPYe8MVgwUvMZrApvw7JAx9G1yu0YtKHROj6ySMVrsItNVM3w4zr2FmumWQbLlhljMHqVs_J_q6yHeYC92L7E"
 # 	fcm, response = testSend(token, payload["userId"], payload["username"], 2)
 # 	new_list = list(map(str, response.split("/")))
-	
+
 
 @app.post("/api/matching/fcm")
 def postCheckingReceiveFCM(loggingId : str ,payload : dict() = Depends(verify_jwt_token)):
@@ -102,10 +102,11 @@ def postCheckingReceiveFCM(loggingId : str ,payload : dict() = Depends(verify_jw
 @app.post("/api/matching")
 async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, payload : dict() = Depends(verify_jwt_token), ACCESS_AUTHORIZATION: Optional[str] = Header(None, convert_underscores = False)):
 	userId = payload["userId"]
+	print(ACCESS_AUTHORIZATION)
 	set = Redis.MessageSet("matching:" + userId)
 	if set.exist():
 		raise MyCustomException(400, -1, "이미 매칭이 진행중입니다.")
-	
+
 	data = {
 		'peopleNumber' : matchingReqDto.peopleNumber,
 		'latitude' : matchingReqDto.latitude,
@@ -124,39 +125,43 @@ async def postMatchingMessage(matchingReqDto : requestDto.MatchingReqDto, payloa
 
 # 카페의 매칭 응답 요청
 @app.post("/api/matching/cafe")
-async def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, payload : dict() = Depends(verify_jwt_token)):
+def receiveMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, payload : dict() = Depends(verify_jwt_token)):
 	cafeId = payload["userId"]
 
 	set = Redis.MessageSet("matching:" + matchingReqDto.userId)
 	if not set.exist():
 		raise MyCustomException(400, -1, "이미 매칭이 진행중입니다.")
-	
+
 	cafes = list(set.get_all())
 	set.delete()
-
 	collection = mongodb.client["jariBeanProd"]["user"]
-	user = await collection.find_one({"_id": ObjectId(matchingReqDto.userId)})
+	user = collection.find_one({"_id": ObjectId(matchingReqDto.userId)})
 
 	collection = mongodb.client["jariBeanProd"]["cafe"]
-	cafe = await collection.find_one({"_id": ObjectId(cafeId)})
+	cafe =  collection.find_one({"_id": ObjectId(cafeId)})
 
 	collection = mongodb.client["jariBeanProd"]["matching"]
-	
+
 	matching = Documents.Matching(
 		userId = matchingReqDto.userId,
-		username = user["name"],
+		username = user["nickname"],
    		cafe = cafe,
 		seating = int(matchingReqDto.peopleNumber),
+		matchingTime = datetime.datetime.now() + datetime.timedelta(hours=9),
 		status = Documents.Status.PROCESSING
 	)
 	result = collection.insert_one(matching.dict())
 
 	sendingAcceptMessageToUserFromCafe(matchingReqDto.userId, result.inserted_id, cafeId)
-	
-	for cafeId in cafes:
-		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId.decode("utf-8"), matchingReqDto.userId)
 
-	return MatchingResponse(1, "요청에 성공했습니다.", result.inserted_id, matchingReqDto.userId)
+	for cafeId in cafes:
+		try:
+			sendingCancelMessageToCafeFromUserBeforeMatching(cafeId.decode("utf-8"), matchingReqDto.userId)
+		except:
+			continue
+
+
+	return MatchingResponse(1, "요청에 성공했습니다.", result.inserted_id)
 
 
 
@@ -169,7 +174,7 @@ async def rejectMatchingMessage(matchingReqDto : requestDto.MatchingCafeReqDto, 
 
 	if set.delete_if_empty():
 		sendingCancelMessageToUser(matchingReqDto.userId)
-		
+
 	return MyCustomResponse(1, "매칭을 거절하였습니다.")
 
 # 유저의 매칭 취소 요청 - 매칭되기 이전
@@ -179,9 +184,12 @@ async def cancelMatchingBefore(payload : dict() = Depends(verify_jwt_token)):
 	username = payload["username"]
 	set = Redis.MessageSet("matching:" + userId)
 	cafes = list(set.get_all())
-	
+
 	for cafeId in cafes:
-		sendingCancelMessageToCafeFromUserBeforeMatching(cafeId.decode("utf-8"), userId)
+		try:
+			sendingCancelMessageToCafeFromUserBeforeMatching(cafeId.decode("utf-8"), userId)
+		except:
+			continue
 	set.delete()
 	return MyCustomResponse(1, "매칭을 취소가 성공하였습니다.")
 
@@ -192,7 +200,7 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 	username = payload["username"]
 
 	collection = mongodb.client["jariBeanProd"]["matching"]
-	
+
 	new_data = {
     	"$set": {
         	"status": "CANCEL",
@@ -202,34 +210,37 @@ async def cancelMatchingAfter(matchingCancelReqDto : requestDto.MatchingCancelRe
 	matching = collection.find_one({"_id": ObjectId(matchingCancelReqDto.matchingId)})
 
 	current_time = datetime.datetime.now()
-	sendingCancelMessageToCafeFromUserAfterMatching(matchingCancelReqDto.cafeId, matchingCancelReqDto.matchingId, username, userId)
+	sendingCancelMessageToCafeFromUserAfterMatching(str(matching["cafe"]["_id"]), matchingCancelReqDto.matchingId, username, userId)
 
 	if current_time - matching["matchingTime"]> datetime.timedelta(seconds=10):
 		# TODO 결제 모듈
 		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급되지 않습니다.")
 	else:
-		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급됩니다.")	
+		return MyCustomResponse(1, "매칭 거절에 성공했습니다! 보증금이 환급됩니다.")
 
 @app.get("/api/matching/status")
 def checkingMatchingProcessing(payload : dict() = Depends(verify_jwt_token)):
 	userId = payload["userId"]
 	new_set = Redis.MessageSet("matching:" + userId)
+
 	if new_set.exist():
 		return CheckingResponse(1, "매칭 요청이 진행중입니다.", "ENQUEUED")
 	
-	current_time = datetime.datetime.now()
+	current_time = datetime.datetime.now() + datetime.timedelta(hours=9)
 	ten_minutes_ago = current_time - datetime.timedelta(minutes=10)
 	collection = mongodb.client["jariBeanProd"]["matching"]
 	query = {
 		"matchingTime": {"$lt": current_time, "$gte": ten_minutes_ago},
 		"userId": userId,
-		"status" : "PROCESS"
+		"status" : "PROCESSING"
 	}
+
 	data = collection.find_one(query)
-	if data == None:
-		return CheckingResponse(1, "매칭이 진행중입니다.", "PROCESSING", str(data._id), str(data.cafe._id))
+	print(data)
+	if data != None:
+		return CheckingResponse(1, "매칭이 진행중입니다.", "PROCESSING", str(data["_id"]), str(data["cafe"]["_id"]))
 	return CheckingResponse(1, "매칭이 진행중이지 않습니다.", "NORMAL")
-	
+
 
 
 
@@ -237,14 +248,13 @@ def checkingMatchingProcessing(payload : dict() = Depends(verify_jwt_token)):
 def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, payload : dict() = Depends(verify_jwt_token)):
 	userId = payload["userId"]
 	username = payload["username"]
-	
 	if postMatchingMessageToCafe.running:
 		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행중입니다.") #이런식으로 텍스트를 박아놓으면 확장성이 안좋지않을까요??? 수정 부탁드립니다..
-	
+
 	new_set = Redis.MessageSet("matching:" + userId)
 	if new_set.exist():
 		raise MyCustomException(400, -1, "이미 매칭이 진행중입니다.")
-	
+
 	postMatchingMessageToCafe.running = True
 	number = matchingReqDto.peopleNumber
 
@@ -257,7 +267,7 @@ def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, payloa
         		"$near": {
             		"$geometry": {
                 		"type" : "Point",
-                		"coordinates" :[matchingReqDto.longitude, matchingReqDto.latitude] #[126.661675911488, 37.450979037492] 
+                		"coordinates" :[matchingReqDto.longitude, matchingReqDto.latitude] #[126.661675911488, 37.450979037492]
             		},
             		"$maxDistance": 700
         		}
@@ -265,13 +275,14 @@ def postMatchingMessageToCafe(matchingReqDto : requestDto.MatchingReqDto, payloa
 		}
 
 		cafes = collection.find(query)
-		
+		print(cafes)
+
 		# this is for 바로 매칭 실패
 		if cafes == None:
 			sendingCancelMessageToUser(userId)
 			new_set.delete()
 			return MyCustomResponse(1, "가능한 카페가 없습니다. 다른 곳에서 매칭을 진행해주세요.")
-		
+
 		for cafe in cafes:
 			cafeId = str(cafe["_id"])
 			new_set.add(cafeId)
@@ -295,7 +306,7 @@ def putNoShow(matchingReq : requestDto.MatchingCancelReqDto, userId : str = Depe
 	print(result)
 	if result['status'] != "PROCESSING":
 		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행되었습니다.")
-	
+
 	new_data = {
     	"$set": {
         	"status": "NOSHOW",
@@ -318,7 +329,7 @@ def putComplete(matchingReq : requestDto.MatchingCancelReqDto, payload : dict() 
 
 	if result['status'] != "PROCESSING":
 		raise MyCustomException(400, -1, "매칭에 대한 처리가 이미 진행되었습니다.")
-	
+
 	new_data = {
     	"$set": {
         	"status": "COMPLETE",

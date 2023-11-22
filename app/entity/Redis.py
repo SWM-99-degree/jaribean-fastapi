@@ -23,6 +23,9 @@ class MessageSet:
         
     def expire(self):
         return self.redis.expire(self.name, 300)
+    
+    def expire_first(self):
+        return self.redis.expire(self.name, 5)
 
     def exist(self): 
         if self.redis.exists(self.name):
